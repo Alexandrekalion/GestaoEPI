@@ -345,7 +345,7 @@ export default function Colaboradores() {
               </thead>
               <tbody className="divide-y divide-slate-200">
                 {colaboradores.map((col) => (
-                  <tr key={col.id} className="hover:bg-slate-50">
+                  <tr key={col.id} className="hover:bg-slate-50 cursor-pointer" onClick={() => window.location.href = `/colaboradores/${col.id}`}>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
                         {col.photo_path ? (
