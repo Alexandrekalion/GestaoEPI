@@ -27,6 +27,7 @@ export const Sidebar = () => {
     { path: '/colaboradores', icon: Users, label: 'Colaboradores', roles: ['super_admin', 'admin', 'gestor'] },
     { path: '/empresas', icon: Building2, label: 'Empresas', roles: ['super_admin', 'admin', 'gestor'] },
     { path: '/epis', icon: Package, label: 'Cadastro EPI', roles: ['super_admin', 'admin', 'gestor'] },
+    { path: '/fornecedores', icon: Truck, label: 'Fornecedores', roles: ['super_admin', 'admin', 'gestor'] },
     { path: '/ferramentas', icon: Wrench, label: 'Ferramentas', roles: ['super_admin', 'admin', 'gestor'] },
     { path: '/kits', icon: Box, label: 'Kits', roles: ['super_admin', 'admin', 'gestor'] },
     { path: '/estoque', icon: Package, label: 'Estoque', roles: ['super_admin', 'admin', 'gestor'] },
