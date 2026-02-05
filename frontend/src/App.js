@@ -15,6 +15,7 @@ import EquipeExterna from '@/pages/EquipeExterna';
 import Documentacao from '@/pages/Documentacao';
 import Usuarios from '@/pages/Usuarios';
 import Configuracoes from '@/pages/Configuracoes';
+import Fornecedores from '@/pages/Fornecedores';
 import '@/App.css';
 
 const PrivateRoute = ({ children }) => {
