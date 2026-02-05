@@ -671,6 +671,21 @@ async def create_document_template(
     await db.refresh(new_template)
     return new_template
 
+@api_router.delete('/document-templates/{template_id}')
+async def delete_document_template(
+    template_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    result = await db.execute(select(DocumentTemplate).filter(DocumentTemplate.id == template_id))
+    template = result.scalar_one_or_none()
+    if not template:
+        raise HTTPException(status_code=404, detail='Modelo não encontrado')
+    
+    await db.delete(template)
+    await db.commit()
+    return {'message': 'Modelo excluído'}
+
 @api_router.get('/external-teams', response_model=List[ExternalTeamResponse])
 async def get_external_teams(
     db: AsyncSession = Depends(get_db),
