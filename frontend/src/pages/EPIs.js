@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { Plus, Package } from 'lucide-react';
+import { Plus, Package, Search } from 'lucide-react';
 import axios from 'axios';
 import { getAuthHeader } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -12,30 +12,51 @@ const API = `${BACKEND_URL}/api`;
 
 export default function EPIs() {
   const [epis, setEpis] = useState([]);
+  const [fornecedores, setFornecedores] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showDialog, setShowDialog] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
   const [formData, setFormData] = useState({
     name: '',
     type_category: '',
-    ca_number: '',
     brand: '',
+    model: '',
+    color: '',
     size: '',
+    material: '',
+    ca_number: '',
+    ca_validity: '',
+    technical_standard: '',
+    supplier_id: '',
+    invoice_number: '',
+    purchase_date: '',
+    quantity_purchased: 0,
+    unit_price: 0,
+    validity_date: '',
     qr_code: '',
+    internal_code: '',
+    batch: '',
+    storage_location: '',
     current_stock: 0,
-    min_stock: 0
+    min_stock: 0,
+    max_stock: 0
   });
 
   useEffect(() => {
-    fetchEPIs();
+    fetchData();
   }, []);
 
-  const fetchEPIs = async () => {
+  const fetchData = async () => {
     try {
-      const response = await axios.get(`${API}/epis`, { headers: getAuthHeader() });
-      setEpis(response.data);
+      const [episRes, suppRes] = await Promise.all([
+        axios.get(`${API}/epis`, { headers: getAuthHeader() }),
+        axios.get(`${API}/suppliers`, { headers: getAuthHeader() })
+      ]);
+      setEpis(episRes.data);
+      setFornecedores(suppRes.data);
     } catch (error) {
       console.error('Erro:', error);
-      toast.error('Erro ao carregar EPIs');
+      toast.error('Erro ao carregar dados');
     } finally {
       setLoading(false);
     }
@@ -47,18 +68,52 @@ export default function EPIs() {
       await axios.post(`${API}/epis`, formData, { headers: getAuthHeader() });
       toast.success('EPI cadastrado com sucesso!');
       setShowDialog(false);
-      setFormData({ name: '', type_category: '', ca_number: '', brand: '', size: '', qr_code: '', current_stock: 0, min_stock: 0 });
-      fetchEPIs();
+      resetForm();
+      fetchData();
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Erro ao cadastrar');
     }
   };
 
+  const resetForm = () => {
+    setFormData({
+      name: '',
+      type_category: '',
+      brand: '',
+      model: '',
+      color: '',
+      size: '',
+      material: '',
+      ca_number: '',
+      ca_validity: '',
+      technical_standard: '',
+      supplier_id: '',
+      invoice_number: '',
+      purchase_date: '',
+      quantity_purchased: 0,
+      unit_price: 0,
+      validity_date: '',
+      qr_code: '',
+      internal_code: '',
+      batch: '',
+      storage_location: '',
+      current_stock: 0,
+      min_stock: 0,
+      max_stock: 0
+    });
+  };
+
+  const filteredEPIs = epis.filter(epi =>
+    epi.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    epi.ca_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (epi.internal_code && epi.internal_code.toLowerCase().includes(searchTerm.toLowerCase()))
+  );
+
   if (loading) {
     return (
       <DashboardLayout>
-        <div className="flex justify-center py-12">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-500"></div>
+        <div className=\"flex justify-center py-12\">
+          <div className=\"animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-500\"></div>
         </div>
       </DashboardLayout>
     );
@@ -66,158 +121,295 @@ export default function EPIs() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6" data-testid="epis-page">
-        <div className="flex items-center justify-between">
+      <div className=\"space-y-6\" data-testid=\"epis-page\">
+        <div className=\"flex items-center justify-between\">
           <div>
-            <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Cadastro de EPIs</h1>
-            <p className="text-slate-600 mt-1">Gerencie os equipamentos de proteção individual</p>
+            <h1 className=\"text-3xl font-bold text-slate-900 tracking-tight\">Cadastro de EPIs</h1>
+            <p className=\"text-slate-600 mt-1\">Gerencie os equipamentos de proteção individual</p>
           </div>
           <Dialog open={showDialog} onOpenChange={setShowDialog}>
             <DialogTrigger asChild>
-              <Button className="bg-emerald-500 hover:bg-emerald-600" data-testid="add-epi-button">
-                <Plus className="w-4 h-4 mr-2" />
+              <Button className=\"bg-emerald-500 hover:bg-emerald-600\" data-testid=\"add-epi-button\">
+                <Plus className=\"w-4 h-4 mr-2\" />
                 Novo EPI
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className=\"max-w-4xl max-h-[90vh] overflow-y-auto\">
               <DialogHeader>
-                <DialogTitle>Novo EPI</DialogTitle>
+                <DialogTitle>Cadastrar Novo EPI</DialogTitle>
               </DialogHeader>
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium mb-1">Nome do EPI *</label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.name}
-                    onChange={(e) => setFormData({...formData, name: e.target.value})}
-                    className="flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Categoria/Tipo *</label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.type_category}
-                    onChange={(e) => setFormData({...formData, type_category: e.target.value})}
-                    className="flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">CA (Certificado) *</label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.ca_number}
-                    onChange={(e) => setFormData({...formData, ca_number: e.target.value})}
-                    className="flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Marca</label>
+              <form onSubmit={handleSubmit} className=\"space-y-4\">
+                <div className=\"grid grid-cols-3 gap-4\">
+                  <div className=\"col-span-3\">
+                    <label className=\"block text-sm font-medium mb-1\">Nome do EPI *</label>
                     <input
-                      type="text"
+                      type=\"text\"
+                      required
+                      value={formData.name}
+                      onChange={(e) => setFormData({...formData, name: e.target.value})}
+                      className=\"flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm\"
+                    />
+                  </div>
+                  <div>
+                    <label className=\"block text-sm font-medium mb-1\">Categoria/Tipo *</label>
+                    <select
+                      required
+                      value={formData.type_category}
+                      onChange={(e) => setFormData({...formData, type_category: e.target.value})}
+                      className=\"flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm\"
+                    >
+                      <option value=\"\">Selecione...</option>
+                      <option value=\"Cabeça\">Cabeça</option>
+                      <option value=\"Olhos/Face\">Olhos/Face</option>
+                      <option value=\"Respiratória\">Respiratória</option>
+                      <option value=\"Mãos/Braços\">Mãos/Braços</option>
+                      <option value=\"Pés/Pernas\">Pés/Pernas</option>
+                      <option value=\"Corpo\">Corpo</option>
+                      <option value=\"Audição\">Audição</option>
+                      <option value=\"Queda\">Queda</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className=\"block text-sm font-medium mb-1\">CA (Certificado) *</label>
+                    <input
+                      type=\"text\"
+                      required
+                      value={formData.ca_number}
+                      onChange={(e) => setFormData({...formData, ca_number: e.target.value})}
+                      className=\"flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm\"
+                      placeholder=\"Número do CA\"
+                    />
+                  </div>
+                  <div>
+                    <label className=\"block text-sm font-medium mb-1\">Validade do CA</label>
+                    <input
+                      type=\"date\"
+                      value={formData.ca_validity}
+                      onChange={(e) => setFormData({...formData, ca_validity: e.target.value})}
+                      className=\"flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm\"
+                    />
+                  </div>
+                  <div>
+                    <label className=\"block text-sm font-medium mb-1\">Marca</label>
+                    <input
+                      type=\"text\"
                       value={formData.brand}
                       onChange={(e) => setFormData({...formData, brand: e.target.value})}
-                      className="flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
+                      className=\"flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm\"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium mb-1">Tamanho</label>
+                    <label className=\"block text-sm font-medium mb-1\">Modelo</label>
                     <input
-                      type="text"
-                      value={formData.size}
-                      onChange={(e) => setFormData({...formData, size: e.target.value})}
-                      className="flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">QR Code</label>
-                  <input
-                    type="text"
-                    value={formData.qr_code}
-                    onChange={(e) => setFormData({...formData, qr_code: e.target.value})}
-                    className="flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Estoque Atual</label>
-                    <input
-                      type="number"
-                      value={formData.current_stock}
-                      onChange={(e) => setFormData({...formData, current_stock: parseInt(e.target.value)})}
-                      className="flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
+                      type=\"text\"
+                      value={formData.model}
+                      onChange={(e) => setFormData({...formData, model: e.target.value})}
+                      className=\"flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm\"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium mb-1">Estoque Mínimo</label>
+                    <label className=\"block text-sm font-medium mb-1\">Cor</label>
                     <input
-                      type="number"
-                      value={formData.min_stock}
-                      onChange={(e) => setFormData({...formData, min_stock: parseInt(e.target.value)})}
-                      className="flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
+                      type=\"text\"
+                      value={formData.color}
+                      onChange={(e) => setFormData({...formData, color: e.target.value})}
+                      className=\"flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm\"
                     />
                   </div>
                 </div>
-                <Button type="submit" className="w-full bg-emerald-500 hover:bg-emerald-600">
-                  Cadastrar
+
+                <div className=\"border-t pt-4\">
+                  <h3 className=\"font-medium text-slate-900 mb-3\">Informações de Compra</h3>
+                  <div className=\"grid grid-cols-3 gap-4\">
+                    <div>
+                      <label className=\"block text-sm font-medium mb-1\">Fornecedor</label>
+                      <select
+                        value={formData.supplier_id}
+                        onChange={(e) => setFormData({...formData, supplier_id: e.target.value})}
+                        className=\"flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm\"
+                      >
+                        <option value=\"\">Selecione...</option>
+                        {fornecedores.map(f => (
+                          <option key={f.id} value={f.id}>{f.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className=\"block text-sm font-medium mb-1\">Data da Compra</label>
+                      <input
+                        type=\"date\"
+                        value={formData.purchase_date}
+                        onChange={(e) => setFormData({...formData, purchase_date: e.target.value})}
+                        className=\"flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm\"
+                      />
+                    </div>
+                    <div>
+                      <label className=\"block text-sm font-medium mb-1\">Número da Nota Fiscal</label>
+                      <input
+                        type=\"text\"
+                        value={formData.invoice_number}
+                        onChange={(e) => setFormData({...formData, invoice_number: e.target.value})}
+                        className=\"flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm\"
+                      />
+                    </div>
+                    <div>
+                      <label className=\"block text-sm font-medium mb-1\">Quantidade Comprada</label>
+                      <input
+                        type=\"number\"
+                        min=\"0\"
+                        value={formData.quantity_purchased}
+                        onChange={(e) => setFormData({...formData, quantity_purchased: parseInt(e.target.value) || 0})}
+                        className=\"flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm\"
+                      />
+                    </div>
+                    <div>
+                      <label className=\"block text-sm font-medium mb-1\">Valor Unitário (R$)</label>
+                      <input
+                        type=\"number\"
+                        step=\"0.01\"
+                        min=\"0\"
+                        value={formData.unit_price}
+                        onChange={(e) => setFormData({...formData, unit_price: parseFloat(e.target.value) || 0})}
+                        className=\"flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm\"
+                      />
+                    </div>
+                    <div>
+                      <label className=\"block text-sm font-medium mb-1\">Validade do EPI</label>
+                      <input
+                        type=\"date\"
+                        value={formData.validity_date}
+                        onChange={(e) => setFormData({...formData, validity_date: e.target.value})}
+                        className=\"flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm\"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className=\"border-t pt-4\">
+                  <h3 className=\"font-medium text-slate-900 mb-3\">Rastreamento e Estoque</h3>
+                  <div className=\"grid grid-cols-3 gap-4\">
+                    <div>
+                      <label className=\"block text-sm font-medium mb-1\">Tamanho</label>
+                      <input
+                        type=\"text\"
+                        value={formData.size}
+                        onChange={(e) => setFormData({...formData, size: e.target.value})}
+                        className=\"flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm\"
+                        placeholder=\"P, M, G, GG, Único\"
+                      />
+                    </div>
+                    <div>
+                      <label className=\"block text-sm font-medium mb-1\">Lote</label>
+                      <input
+                        type=\"text\"
+                        value={formData.batch}
+                        onChange={(e) => setFormData({...formData, batch: e.target.value})}
+                        className=\"flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm\"
+                      />
+                    </div>
+                    <div>
+                      <label className=\"block text-sm font-medium mb-1\">QR Code</label>
+                      <input
+                        type=\"text\"
+                        value={formData.qr_code}
+                        onChange={(e) => setFormData({...formData, qr_code: e.target.value})}
+                        className=\"flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm\"
+                      />
+                    </div>
+                    <div>
+                      <label className=\"block text-sm font-medium mb-1\">Código Interno</label>
+                      <input
+                        type=\"text\"
+                        value={formData.internal_code}
+                        onChange={(e) => setFormData({...formData, internal_code: e.target.value})}
+                        className=\"flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm\"
+                      />
+                    </div>
+                    <div>
+                      <label className=\"block text-sm font-medium mb-1\">Local de Armazenamento</label>
+                      <input
+                        type=\"text\"
+                        value={formData.storage_location}
+                        onChange={(e) => setFormData({...formData, storage_location: e.target.value})}
+                        className=\"flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm\"
+                      />
+                    </div>
+                    <div>
+                      <label className=\"block text-sm font-medium mb-1\">Material</label>
+                      <input
+                        type=\"text\"
+                        value={formData.material}
+                        onChange={(e) => setFormData({...formData, material: e.target.value})}
+                        className=\"flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm\"
+                      />
+                    </div>
+                    <div>
+                      <label className=\"block text-sm font-medium mb-1\">Estoque Atual</label>
+                      <input
+                        type=\"number\"
+                        min=\"0\"
+                        value={formData.current_stock}
+                        onChange={(e) => setFormData({...formData, current_stock: parseInt(e.target.value) || 0})}
+                        className=\"flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm\"
+                      />
+                    </div>
+                    <div>
+                      <label className=\"block text-sm font-medium mb-1\">Estoque Mínimo</label>
+                      <input
+                        type=\"number\"
+                        min=\"0\"
+                        value={formData.min_stock}
+                        onChange={(e) => setFormData({...formData, min_stock: parseInt(e.target.value) || 0})}
+                        className=\"flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm\"
+                      />
+                    </div>
+                    <div>
+                      <label className=\"block text-sm font-medium mb-1\">Estoque Máximo</label>
+                      <input
+                        type=\"number\"
+                        min=\"0\"
+                        value={formData.max_stock}
+                        onChange={(e) => setFormData({...formData, max_stock: parseInt(e.target.value) || 0})}
+                        className=\"flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm\"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <Button type=\"submit\" className=\"w-full bg-emerald-500 hover:bg-emerald-600\">
+                  Cadastrar EPI
                 </Button>
               </form>
             </DialogContent>
           </Dialog>
         </div>
 
-        <div className="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-slate-50 border-b border-slate-200">
+        <div className=\"bg-white border border-slate-200 rounded-lg shadow-sm\">
+          <div className=\"p-4 border-b border-slate-200\">
+            <div className=\"flex items-center gap-3\">
+              <Search className=\"w-5 h-5 text-slate-400\" />
+              <input
+                type=\"text\"
+                placeholder=\"Buscar por nome, CA, código interno...\"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className=\"flex-1 outline-none text-sm\"
+              />
+            </div>
+          </div>
+          <div className=\"overflow-x-auto\">
+            <table className=\"w-full\">
+              <thead className=\"bg-slate-50 border-b border-slate-200\">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">EPI</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Categoria</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">CA</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Marca</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Estoque</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Status</th>
+                  <th className=\"px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase\">EPI</th>
+                  <th className=\"px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase\">CA</th>
+                  <th className=\"px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase\">Marca</th>
+                  <th className=\"px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase\">Cor</th>
+                  <th className=\"px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase\">Fornecedor</th>
+                  <th className=\"px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase\">Data Compra</th>
+                  <th className=\"px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase\">Validade</th>
+                  <th className=\"px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase\">Estoque</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-200">
-                {epis.map((epi) => (
-                  <tr key={epi.id} className="hover:bg-slate-50">
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                          <Package className="w-5 h-5 text-blue-600" />
-                        </div>
-                        <div>
-                          <p className="font-medium text-slate-900">{epi.name}</p>
-                          <p className="text-sm text-slate-500">{epi.size || 'Único'}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-slate-900">{epi.type_category}</td>
-                    <td className="px-6 py-4 text-sm font-mono text-slate-900">{epi.ca_number}</td>
-                    <td className="px-6 py-4 text-sm text-slate-900">{epi.brand || '-'}</td>
-                    <td className="px-6 py-4 text-sm font-mono font-bold text-slate-900">{epi.current_stock}</td>
-                    <td className="px-6 py-4">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        epi.current_stock > epi.min_stock
-                          ? 'bg-emerald-100 text-emerald-700'
-                          : 'bg-orange-100 text-orange-700'
-                      }`}>
-                        {epi.current_stock > epi.min_stock ? 'OK' : 'Baixo'}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    </DashboardLayout>
-  );
-}
+              <tbody className=\"divide-y divide-slate-200\">
+                {filteredEPIs.map((epi) => (\n                  <tr key={epi.id} className=\"hover:bg-slate-50\">\n                    <td className=\"px-6 py-4\">\n                      <div className=\"flex items-center gap-3\">\n                        <div className=\"w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center\">\n                          <Package className=\"w-5 h-5 text-blue-600\" />\n                        </div>\n                        <div>\n                          <p className=\"font-medium text-slate-900\">{epi.name}</p>\n                          <p className=\"text-sm text-slate-500\">{epi.type_category} - {epi.size || 'Único'}</p>\n                        </div>\n                      </div>\n                    </td>\n                    <td className=\"px-6 py-4 text-sm font-mono text-slate-900\">{epi.ca_number}</td>\n                    <td className=\"px-6 py-4 text-sm text-slate-900\">{epi.brand || '-'}</td>\n                    <td className=\"px-6 py-4 text-sm text-slate-900\">{epi.color || '-'}</td>\n                    <td className=\"px-6 py-4 text-sm text-slate-900\">{epi.supplier_id || '-'}</td>\n                    <td className=\"px-6 py-4 text-sm text-slate-900\">\n                      {epi.purchase_date ? new Date(epi.purchase_date).toLocaleDateString('pt-BR') : '-'}\n                    </td>\n                    <td className=\"px-6 py-4 text-sm text-slate-900\">\n                      {epi.validity_date ? new Date(epi.validity_date).toLocaleDateString('pt-BR') : '-'}\n                    </td>\n                    <td className=\"px-6 py-4\">\n                      <div className=\"flex items-center gap-2\">\n                        <span className=\"text-sm font-mono font-bold text-slate-900\">{epi.current_stock}</span>\n                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${\n                          epi.current_stock > epi.min_stock\n                            ? 'bg-emerald-100 text-emerald-700'\n                            : 'bg-orange-100 text-orange-700'\n                        }`}>\n                          {epi.current_stock > epi.min_stock ? 'OK' : 'Baixo'}\n                        </span>\n                      </div>\n                    </td>\n                  </tr>\n                ))}\n              </tbody>\n            </table>\n          </div>\n        </div>\n      </div>\n    </DashboardLayout>\n  );\n}
