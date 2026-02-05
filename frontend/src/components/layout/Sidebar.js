@@ -12,7 +12,8 @@ import {
   FileText, 
   UsersRound, 
   Settings,
-  LogOut
+  LogOut,
+  Truck
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 
