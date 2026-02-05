@@ -72,7 +72,7 @@ class CipolattiAPITester:
             must_change = response.get('must_change_password', False)
             role = response.get('role', '')
             
-            self.log_result("Login with initial credentials", True)
+            self.log_result("Login with current credentials", True)
             self.log_result(f"Must change password: {must_change}", True)
             self.log_result(f"User role: {role}", role == 'super_admin')
             
