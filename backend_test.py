@@ -61,10 +61,10 @@ class CipolattiAPITester:
         """Test login with initial credentials"""
         print("\n🔐 Testing Authentication...")
         
-        # Test login with initial credentials
+        # Test login with current credentials (password may have been changed)
         success, response, status = self.make_request(
             'POST', 'auth/login', 
-            {"username": "administrador", "password": "LR1a2b3c4567@"}
+            {"username": "administrador", "password": "NovaSenha123@"}
         )
         
         if success and 'access_token' in response:
