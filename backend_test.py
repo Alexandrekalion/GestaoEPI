@@ -78,7 +78,7 @@ class CipolattiAPITester:
             
             return must_change
         else:
-            self.log_result("Login with initial credentials", False, f"Status: {status}, Response: {response}")
+            self.log_result("Login with current credentials", False, f"Status: {status}, Response: {response}")
             return False
 
     def test_change_password(self):
