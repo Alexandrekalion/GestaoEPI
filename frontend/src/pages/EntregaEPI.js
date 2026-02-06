@@ -1,6 +1,6 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { Camera, QrCode, User, Package, CheckCircle2, ScanFace, History, AlertTriangle, X } from 'lucide-react';
+import { Camera, QrCode, User, Package, CheckCircle2, ScanFace, History, AlertTriangle, X, Loader2 } from 'lucide-react';
 import Webcam from 'react-webcam';
 import { Html5QrcodeScanner } from 'html5-qrcode';
 import axios from 'axios';
@@ -11,6 +11,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
+
+// Configurações otimizadas do detector facial
+const FACE_DETECTOR_OPTIONS = new faceapi.TinyFaceDetectorOptions({
+  inputSize: 416,      // Maior = mais preciso, menor = mais rápido (160, 224, 320, 416, 512, 608)
+  scoreThreshold: 0.5  // Confiança mínima para detectar rosto
+});
 
 export default function EntregaEPI() {
   const [step, setStep] = useState('facial');
@@ -29,6 +35,11 @@ export default function EntregaEPI() {
   const [employeeCurrentItems, setEmployeeCurrentItems] = useState([]);
   const [showHistoryDialog, setShowHistoryDialog] = useState(false);
   const [capturedPhoto, setCapturedPhoto] = useState(null);
+  const [loadingStatus, setLoadingStatus] = useState('');
+  
+  // Cache de templates faciais - carregado uma vez
+  const [facialTemplatesCache, setFacialTemplatesCache] = useState([]);
+  const [templatesLoaded, setTemplatesLoaded] = useState(false);
   
   const webcamRef = useRef(null);
   const qrScannerRef = useRef(null);
@@ -39,20 +50,79 @@ export default function EntregaEPI() {
     fetchKits();
     fetchAllEmployees();
   }, []);
+  
+  // Carregar templates quando colaboradores forem carregados
+  useEffect(() => {
+    if (allEmployees.length > 0 && modelsLoaded && !templatesLoaded) {
+      loadAllFacialTemplates();
+    }
+  }, [allEmployees, modelsLoaded, templatesLoaded]);
 
   const loadFaceModels = async () => {
     try {
+      setLoadingStatus('Carregando modelos de IA...');
       await Promise.all([
         faceapi.nets.tinyFaceDetector.loadFromUri('/models'),
         faceapi.nets.faceLandmark68Net.loadFromUri('/models'),
         faceapi.nets.faceRecognitionNet.loadFromUri('/models')
       ]);
       setModelsLoaded(true);
+      setLoadingStatus('');
     } catch (error) {
       console.error('Erro ao carregar modelos faciais:', error);
       toast.error('Erro ao carregar modelos de reconhecimento facial');
     }
   };
+  
+  // Carregar TODOS os templates de uma vez e criar FaceMatcher
+  const loadAllFacialTemplates = useCallback(async () => {
+    try {
+      setLoadingStatus('Carregando base de dados facial...');
+      const templatesWithEmployees = [];
+      
+      // Buscar templates de todos os colaboradores com foto
+      const employeesWithPhoto = allEmployees.filter(e => e.photo_path);
+      
+      for (const employee of employeesWithPhoto) {
+        try {
+          const res = await axios.get(
+            `${API}/employees/${employee.id}/facial-templates`,
+            { headers: getAuthHeader() }
+          );
+          
+          if (res.data.length > 0) {
+            for (const template of res.data) {
+              try {
+                const descriptor = new Float32Array(JSON.parse(template.descriptor));
+                templatesWithEmployees.push({
+                  employee,
+                  descriptor,
+                  templateId: template.id
+                });
+              } catch (e) {
+                console.error('Erro ao parsear descriptor:', e);
+              }
+            }
+          }
+        } catch (e) {
+          // Colaborador sem template - ignorar
+        }
+      }
+      
+      setFacialTemplatesCache(templatesWithEmployees);
+      setTemplatesLoaded(true);
+      setLoadingStatus('');
+      
+      if (templatesWithEmployees.length > 0) {
+        console.log(`${templatesWithEmployees.length} templates faciais carregados`);
+      } else {
+        console.log('Nenhum template facial cadastrado');
+      }
+    } catch (error) {
+      console.error('Erro ao carregar templates:', error);
+      setLoadingStatus('');
+    }
+  }, [allEmployees]);
 
   const fetchEPIs = async () => {
     try {
