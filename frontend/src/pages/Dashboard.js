@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { Users, Package, AlertTriangle, TrendingUp } from 'lucide-react';
+import { Users, Package, AlertTriangle, TrendingUp, Calendar } from 'lucide-react';
 import axios from 'axios';
 import { getAuthHeader } from '@/contexts/AuthContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -9,6 +10,7 @@ const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
 export default function Dashboard() {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const [stats, setStats] = useState(null);
   const [license, setLicense] = useState(null);
@@ -30,14 +32,41 @@ export default function Dashboard() {
         alerts: alertsRes.data
       });
 
-      if (user?.role === 'super_admin') {
-        const licenseRes = await axios.get(`${API}/license`, { headers: getAuthHeader() });
-        setLicense(licenseRes.data);
+      if (user?.role === 'admin') {
+        try {
+          const licenseRes = await axios.get(`${API}/license`, { headers: getAuthHeader() });
+          setLicense(licenseRes.data);
+        } catch (e) {
+          console.log('Licença não disponível');
+        }
       }
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Navegação dos cards clicáveis
+  const handleCardClick = (type) => {
+    switch(type) {
+      case 'colaboradores':
+        navigate('/colaboradores');
+        break;
+      case 'epis':
+        navigate('/epis');
+        break;
+      case 'estoque_baixo':
+        navigate('/epis?filter=low_stock');
+        break;
+      case 'entregas':
+        navigate('/entrega-epi?view=history');
+        break;
+      case 'validade':
+        navigate('/epis?filter=expiring');
+        break;
+      default:
+        break;
     }
   };
 
@@ -59,8 +88,13 @@ export default function Dashboard() {
           <p className="text-slate-600 mt-1">Visão geral do sistema Cipolatti</p>
         </div>
 
+        {/* Cards Clicáveis - BI Interativo */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <div className="bg-white border border-slate-200 rounded-lg shadow-sm p-6">
+          <div 
+            onClick={() => handleCardClick('colaboradores')}
+            className="bg-white border border-slate-200 rounded-lg shadow-sm p-6 cursor-pointer hover:shadow-md hover:border-emerald-300 transition-all"
+            data-testid="card-colaboradores"
+          >
             <div className="flex items-center justify-between mb-4">
               <div className="w-12 h-12 bg-emerald-100 rounded-lg flex items-center justify-center">
                 <Users className="w-6 h-6 text-emerald-600" />
@@ -72,7 +106,11 @@ export default function Dashboard() {
             </div>
           </div>
 
-          <div className="bg-white border border-slate-200 rounded-lg shadow-sm p-6">
+          <div 
+            onClick={() => handleCardClick('epis')}
+            className="bg-white border border-slate-200 rounded-lg shadow-sm p-6 cursor-pointer hover:shadow-md hover:border-blue-300 transition-all"
+            data-testid="card-epis"
+          >
             <div className="flex items-center justify-between mb-4">
               <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
                 <Package className="w-6 h-6 text-blue-600" />
@@ -84,19 +122,35 @@ export default function Dashboard() {
             </div>
           </div>
 
-          <div className="bg-white border border-slate-200 rounded-lg shadow-sm p-6">
+          <div 
+            onClick={() => handleCardClick('estoque_baixo')}
+            className={`border rounded-lg shadow-sm p-6 cursor-pointer hover:shadow-md transition-all ${
+              stats?.low_stock_count > 0 
+                ? 'bg-orange-50 border-orange-200 hover:border-orange-400' 
+                : 'bg-white border-slate-200 hover:border-orange-300'
+            }`}
+            data-testid="card-estoque-baixo"
+          >
             <div className="flex items-center justify-between mb-4">
-              <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
-                <AlertTriangle className="w-6 h-6 text-orange-600" />
+              <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
+                stats?.low_stock_count > 0 ? 'bg-orange-200' : 'bg-orange-100'
+              }`}>
+                <AlertTriangle className={`w-6 h-6 ${stats?.low_stock_count > 0 ? 'text-orange-700' : 'text-orange-600'}`} />
               </div>
             </div>
             <div>
-              <p className="text-3xl font-bold text-slate-900 font-mono">{stats?.low_stock_count || 0}</p>
+              <p className={`text-3xl font-bold font-mono ${
+                stats?.low_stock_count > 0 ? 'text-orange-700' : 'text-slate-900'
+              }`}>{stats?.low_stock_count || 0}</p>
               <p className="text-sm text-slate-600 mt-1">Estoque Baixo</p>
             </div>
           </div>
 
-          <div className="bg-white border border-slate-200 rounded-lg shadow-sm p-6">
+          <div 
+            onClick={() => handleCardClick('entregas')}
+            className="bg-white border border-slate-200 rounded-lg shadow-sm p-6 cursor-pointer hover:shadow-md hover:border-purple-300 transition-all"
+            data-testid="card-entregas"
+          >
             <div className="flex items-center justify-between mb-4">
               <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
                 <TrendingUp className="w-6 h-6 text-purple-600" />
@@ -109,6 +163,26 @@ export default function Dashboard() {
           </div>
         </div>
 
+        {/* Card de EPIs com Validade Próxima */}
+        {stats?.expiring_epis > 0 && (
+          <div 
+            onClick={() => handleCardClick('validade')}
+            className="bg-red-50 border border-red-200 rounded-lg shadow-sm p-6 cursor-pointer hover:shadow-md hover:border-red-400 transition-all"
+            data-testid="card-validade"
+          >
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-red-200 rounded-lg flex items-center justify-center">
+                <Calendar className="w-6 h-6 text-red-700" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-red-700 font-mono">{stats?.expiring_epis || 0}</p>
+                <p className="text-sm text-red-600">EPIs com Validade Próxima (30 dias)</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Licença do Painel - Apenas Admin */}
         {license && (
           <div className="bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-lg shadow-md p-6 text-white">
             <h3 className="text-xl font-bold mb-2">Licença do Painel</h3>
@@ -122,6 +196,7 @@ export default function Dashboard() {
           </div>
         )}
 
+        {/* Alertas Detalhados */}
         {stats?.alerts && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {stats.alerts.low_stock?.length > 0 && (
