@@ -69,7 +69,10 @@ async def login(request: LoginRequest):
     license_doc = await db.panel_license.find_one({})
     if license_doc:
         now = datetime.now(timezone.utc)
-        if now > license_doc['expires_at'] and user['role'] != 'super_admin':
+        expires_at = license_doc['expires_at']
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        if now > expires_at and user['role'] != 'super_admin':
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Preciso ativar o Painel')
     
     access_token = create_access_token(data={'sub': user['username'], 'role': user['role']})
