@@ -95,11 +95,17 @@ export const Sidebar = () => {
     <div className="w-64 bg-slate-900 min-h-screen flex flex-col" data-testid="sidebar">
       <div className="p-6 border-b border-slate-800">
         <div className="flex items-center gap-3">
-          <img 
-            src="/icone-cipolatti.png" 
-            alt="Cipolatti" 
-            className="w-10 h-10 rounded-md object-contain bg-white p-1"
-          />
+          <div className="w-10 h-10 rounded-md overflow-hidden bg-white flex items-center justify-center">
+            <img 
+              src="/icone-cipolatti.png" 
+              alt="Cipolatti" 
+              className="w-8 h-8 object-contain"
+              onError={(e) => {
+                e.target.style.display = 'none';
+                e.target.parentNode.innerHTML = '<span class="text-emerald-600 font-bold text-lg">C</span>';
+              }}
+            />
+          </div>
           <div>
             <h1 className="text-white font-bold text-lg tracking-tight">Cipolatti</h1>
             <p className="text-slate-400 text-xs">Gestão de EPI</p>
