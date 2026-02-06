@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { Plus, Search, User, Camera, Upload } from 'lucide-react';
+import { Plus, Search, User, Camera, Upload, Eye, Edit2 } from 'lucide-react';
 import axios from 'axios';
 import { getAuthHeader } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -12,13 +13,16 @@ const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
 export default function Colaboradores() {
+  const navigate = useNavigate();
   const [colaboradores, setColaboradores] = useState([]);
+  const [filteredColaboradores, setFilteredColaboradores] = useState([]);
   const [empresas, setEmpresas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showDialog, setShowDialog] = useState(false);
   const [showWebcam, setShowWebcam] = useState(false);
   const [photoFile, setPhotoFile] = useState(null);
   const [photoPreview, setPhotoPreview] = useState(null);
+  const [searchTerm, setSearchTerm] = useState('');
   const webcamRef = useRef(null);
   const [formData, setFormData] = useState({
     full_name: '',
@@ -38,6 +42,10 @@ export default function Colaboradores() {
     fetchData();
   }, []);
 
+  useEffect(() => {
+    filterColaboradores();
+  }, [searchTerm, colaboradores]);
+
   const fetchData = async () => {
     try {
       const [colRes, empRes] = await Promise.all([
@@ -45,6 +53,7 @@ export default function Colaboradores() {
         axios.get(`${API}/companies`, { headers: getAuthHeader() })
       ]);
       setColaboradores(colRes.data);
+      setFilteredColaboradores(colRes.data);
       setEmpresas(empRes.data);
     } catch (error) {
       console.error('Erro:', error);
@@ -52,6 +61,23 @@ export default function Colaboradores() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const filterColaboradores = () => {
+    if (!searchTerm.trim()) {
+      setFilteredColaboradores(colaboradores);
+      return;
+    }
+    
+    const term = searchTerm.toLowerCase();
+    const filtered = colaboradores.filter(col => 
+      col.full_name?.toLowerCase().includes(term) ||
+      col.cpf?.toLowerCase().includes(term) ||
+      col.registration_number?.toLowerCase().includes(term) ||
+      col.department?.toLowerCase().includes(term) ||
+      col.position?.toLowerCase().includes(term)
+    );
+    setFilteredColaboradores(filtered);
   };
 
   const capturePhoto = () => {
@@ -94,7 +120,8 @@ export default function Colaboradores() {
       resetForm();
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Erro ao cadastrar');
+      const errorMsg = error.response?.data?.detail || 'Erro ao cadastrar';
+      toast.error(errorMsg);
     }
   };
 
@@ -114,6 +141,10 @@ export default function Colaboradores() {
     });
     setPhotoFile(null);
     setPhotoPreview(null);
+  };
+
+  const openColaborador = (id) => {
+    navigate(`/colaboradores/${id}`);
   };
 
   if (loading) {
@@ -155,6 +186,7 @@ export default function Colaboradores() {
                       value={formData.full_name}
                       onChange={(e) => setFormData({...formData, full_name: e.target.value})}
                       className="flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
+                      data-testid="input-full-name"
                     />
                   </div>
                   <div>
@@ -166,6 +198,7 @@ export default function Colaboradores() {
                       onChange={(e) => setFormData({...formData, cpf: e.target.value})}
                       className="flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
                       placeholder="000.000.000-00"
+                      data-testid="input-cpf"
                     />
                   </div>
                   <div>
@@ -311,7 +344,7 @@ export default function Colaboradores() {
                   </label>
                 </div>
 
-                <Button type="submit" className="w-full bg-emerald-500 hover:bg-emerald-600">
+                <Button type="submit" className="w-full bg-emerald-500 hover:bg-emerald-600" data-testid="submit-colaborador">
                   Cadastrar Colaborador
                 </Button>
               </form>
@@ -325,61 +358,92 @@ export default function Colaboradores() {
               <Search className="w-5 h-5 text-slate-400" />
               <input
                 type="text"
-                placeholder="Buscar por nome, CPF, matrícula..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Buscar por nome, CPF, matrícula, cargo, setor..."
                 className="flex-1 outline-none text-sm"
+                data-testid="search-colaborador"
               />
+              {searchTerm && (
+                <button 
+                  onClick={() => setSearchTerm('')}
+                  className="text-slate-400 hover:text-slate-600"
+                >
+                  Limpar
+                </button>
+              )}
             </div>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-slate-50 border-b border-slate-200">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Colaborador</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">CPF</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">RG</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Matrícula</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Cargo</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Setor</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200">
-                {colaboradores.map((col) => (
-                  <tr key={col.id} className="hover:bg-slate-50 cursor-pointer" onClick={() => window.location.href = `/colaboradores/${col.id}`}>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        {col.photo_path ? (
-                          <img src={`${BACKEND_URL}${col.photo_path}`} alt="" className="w-10 h-10 rounded-full object-cover" />
-                        ) : (
-                          <div className="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center">
-                            <User className="w-5 h-5 text-emerald-600" />
-                          </div>
-                        )}
-                        <div>
-                          <p className="font-medium text-slate-900">{col.full_name}</p>
-                          <p className="text-sm text-slate-500">{col.email}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 text-sm font-mono text-slate-900">{col.cpf}</td>
-                    <td className="px-6 py-4 text-sm text-slate-900">{col.rg || '-'}</td>
-                    <td className="px-6 py-4 text-sm font-mono text-slate-900">{col.registration_number || '-'}</td>
-                    <td className="px-6 py-4 text-sm text-slate-900">{col.position || '-'}</td>
-                    <td className="px-6 py-4 text-sm text-slate-900">{col.department || '-'}</td>
-                    <td className="px-6 py-4">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        col.status === 'active'
-                          ? 'bg-emerald-100 text-emerald-700'
-                          : 'bg-slate-100 text-slate-600'
-                      }`}>
-                        {col.status === 'active' ? 'Ativo' : 'Inativo'}
-                      </span>
-                    </td>
+          
+          {filteredColaboradores.length === 0 ? (
+            <div className="p-8 text-center">
+              <User className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+              <p className="text-slate-500">
+                {searchTerm ? 'Nenhum colaborador encontrado com esses critérios' : 'Nenhum colaborador cadastrado'}
+              </p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-slate-50 border-b border-slate-200">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Colaborador</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">CPF</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Matrícula</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Cargo</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Setor</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Status</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Ações</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-slate-200">
+                  {filteredColaboradores.map((col) => (
+                    <tr key={col.id} className="hover:bg-slate-50">
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          {col.photo_path ? (
+                            <img src={`${BACKEND_URL}${col.photo_path}`} alt="" className="w-10 h-10 rounded-full object-cover" />
+                          ) : (
+                            <div className="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center">
+                              <User className="w-5 h-5 text-emerald-600" />
+                            </div>
+                          )}
+                          <div>
+                            <p className="font-medium text-slate-900">{col.full_name}</p>
+                            <p className="text-sm text-slate-500">{col.email || '-'}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-sm font-mono text-slate-900">{col.cpf}</td>
+                      <td className="px-6 py-4 text-sm font-mono text-slate-900">{col.registration_number || '-'}</td>
+                      <td className="px-6 py-4 text-sm text-slate-900">{col.position || '-'}</td>
+                      <td className="px-6 py-4 text-sm text-slate-900">{col.department || '-'}</td>
+                      <td className="px-6 py-4">
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                          col.status === 'active'
+                            ? 'bg-emerald-100 text-emerald-700'
+                            : 'bg-slate-100 text-slate-600'
+                        }`}>
+                          {col.status === 'active' ? 'Ativo' : 'Inativo'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          onClick={() => openColaborador(col.id)}
+                          data-testid={`view-colaborador-${col.id}`}
+                        >
+                          <Eye className="w-4 h-4 mr-1" />
+                          Ver Ficha
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </div>
     </DashboardLayout>
