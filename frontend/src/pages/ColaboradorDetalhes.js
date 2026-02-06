@@ -280,10 +280,10 @@ export default function ColaboradorDetalhes() {
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-2 border-b border-slate-200">
+        <div className="flex gap-2 border-b border-slate-200 overflow-x-auto">
           <button
             onClick={() => setActiveTab('resumo')}
-            className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors ${
+            className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors whitespace-nowrap ${
               activeTab === 'resumo'
                 ? 'border-emerald-500 text-emerald-600'
                 : 'border-transparent text-slate-600 hover:text-slate-900'
@@ -293,8 +293,25 @@ export default function ColaboradorDetalhes() {
             EPIs em Uso
           </button>
           <button
+            onClick={() => setActiveTab('biometria')}
+            className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors whitespace-nowrap ${
+              activeTab === 'biometria'
+                ? 'border-emerald-500 text-emerald-600'
+                : 'border-transparent text-slate-600 hover:text-slate-900'
+            }`}
+            data-testid="tab-biometria"
+          >
+            <ScanFace className="w-4 h-4 inline mr-2" />
+            Biometria Facial
+            {facialTemplates.length > 0 && (
+              <span className="ml-2 px-2 py-0.5 bg-emerald-100 text-emerald-700 text-xs rounded-full">
+                {facialTemplates.length}
+              </span>
+            )}
+          </button>
+          <button
             onClick={() => setActiveTab('historico')}
-            className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors ${
+            className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors whitespace-nowrap ${
               activeTab === 'historico'
                 ? 'border-emerald-500 text-emerald-600'
                 : 'border-transparent text-slate-600 hover:text-slate-900'
@@ -305,7 +322,7 @@ export default function ColaboradorDetalhes() {
           </button>
           <button
             onClick={() => setActiveTab('documentos')}
-            className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors ${
+            className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors whitespace-nowrap ${
               activeTab === 'documentos'
                 ? 'border-emerald-500 text-emerald-600'
                 : 'border-transparent text-slate-600 hover:text-slate-900'
