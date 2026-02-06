@@ -136,13 +136,27 @@ export default function ColaboradorDetalhes() {
     setCapturingFace(true);
     try {
       const img = await faceapi.fetchImage(imageSrc);
+      
+      // Opções otimizadas para captura de template
+      const detectorOptions = new faceapi.TinyFaceDetectorOptions({
+        inputSize: 416,
+        scoreThreshold: 0.5
+      });
+      
       const detection = await faceapi
-        .detectSingleFace(img, new faceapi.TinyFaceDetectorOptions())
+        .detectSingleFace(img, detectorOptions)
         .withFaceLandmarks()
         .withFaceDescriptor();
       
       if (!detection) {
-        toast.error('Nenhum rosto detectado. Posicione melhor o rosto e tente novamente.');
+        toast.error('Nenhum rosto detectado. Posicione o rosto de frente para a câmera com boa iluminação.');
+        setCapturingFace(false);
+        return;
+      }
+      
+      // Verificar qualidade da detecção
+      if (detection.detection.score < 0.7) {
+        toast.error('Qualidade da imagem baixa. Melhore a iluminação e tente novamente.');
         setCapturingFace(false);
         return;
       }
@@ -156,7 +170,7 @@ export default function ColaboradorDetalhes() {
         { headers: getAuthHeader() }
       );
       
-      toast.success('Template facial cadastrado com sucesso!');
+      toast.success('✓ Template facial cadastrado com sucesso!');
       setShowWebcam(false);
       fetchFacialTemplates();
     } catch (error) {
