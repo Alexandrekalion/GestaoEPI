@@ -119,6 +119,65 @@ export default function ColaboradorDetalhes() {
     if (!date) return false;
     return new Date(date) < new Date();
   };
+  
+  // Função para capturar e cadastrar template facial
+  const captureFacialTemplate = async () => {
+    if (!webcamRef.current || !modelsLoaded) {
+      toast.error('Câmera ou modelos não carregados');
+      return;
+    }
+    
+    const imageSrc = webcamRef.current.getScreenshot();
+    if (!imageSrc) {
+      toast.error('Não foi possível capturar a imagem');
+      return;
+    }
+    
+    setCapturingFace(true);
+    try {
+      const img = await faceapi.fetchImage(imageSrc);
+      const detection = await faceapi
+        .detectSingleFace(img, new faceapi.TinyFaceDetectorOptions())
+        .withFaceLandmarks()
+        .withFaceDescriptor();
+      
+      if (!detection) {
+        toast.error('Nenhum rosto detectado. Posicione melhor o rosto e tente novamente.');
+        setCapturingFace(false);
+        return;
+      }
+      
+      // Salvar o descriptor como template facial
+      const descriptorArray = Array.from(detection.descriptor);
+      
+      await axios.post(
+        `${API}/employees/${id}/facial-templates`,
+        { descriptor: JSON.stringify(descriptorArray) },
+        { headers: getAuthHeader() }
+      );
+      
+      toast.success('Template facial cadastrado com sucesso!');
+      setShowWebcam(false);
+      fetchFacialTemplates();
+    } catch (error) {
+      console.error('Erro ao processar facial:', error);
+      toast.error('Erro ao processar reconhecimento facial');
+    } finally {
+      setCapturingFace(false);
+    }
+  };
+  
+  const deleteFacialTemplate = async (templateId) => {
+    if (!window.confirm('Tem certeza que deseja excluir este template facial?')) return;
+    
+    try {
+      await axios.delete(`${API}/employees/${id}/facial-templates/${templateId}`, { headers: getAuthHeader() });
+      toast.success('Template excluído');
+      fetchFacialTemplates();
+    } catch (error) {
+      toast.error('Erro ao excluir template');
+    }
+  };
 
   if (loading) {
     return (
