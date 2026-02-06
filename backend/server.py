@@ -429,6 +429,22 @@ async def create_facial_template(employee_id: str, template_data: FacialTemplate
     new_template['_id'] = result.inserted_id
     return doc_to_response(new_template)
 
+@api_router.delete('/employees/{employee_id}/facial-templates/{template_id}')
+async def delete_facial_template(employee_id: str, template_id: str, current_user: dict = Depends(get_current_user)):
+    if not can_manage_employees(current_user['role']):
+        raise HTTPException(status_code=403, detail='Sem permissão')
+    
+    db = await get_db()
+    result = await db.facial_templates.delete_one({
+        "_id": ObjectId(template_id),
+        "employee_id": employee_id
+    })
+    
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail='Template não encontrado')
+    
+    return {'message': 'Template excluído'}
+
 # ===================== SUPPLIERS =====================
 
 @api_router.get('/suppliers', response_model=List[SupplierResponse])
