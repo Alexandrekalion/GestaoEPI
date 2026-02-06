@@ -11,6 +11,7 @@ from bson import ObjectId
 import os
 import shutil
 import logging
+import base64
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -18,6 +19,9 @@ logger = logging.getLogger(__name__)
 ROOT_DIR = Path(__file__).parent
 UPLOAD_DIR = ROOT_DIR / 'uploads'
 UPLOAD_DIR.mkdir(exist_ok=True)
+
+# Dias para expiração de senha
+PASSWORD_EXPIRY_DAYS = 30
 
 app = FastAPI(title='Cipolatti API')
 api_router = APIRouter(prefix='/api')
@@ -49,6 +53,47 @@ def doc_to_response(doc, id_field='id'):
     result[id_field] = str(doc['_id'])
     return result
 
+def check_password_expired(user):
+    """Verifica se a senha expirou (mais de 30 dias)"""
+    password_changed_at = user.get('password_changed_at')
+    if not password_changed_at:
+        return False
+    
+    if password_changed_at.tzinfo is None:
+        password_changed_at = password_changed_at.replace(tzinfo=timezone.utc)
+    
+    expiry_date = password_changed_at + timedelta(days=PASSWORD_EXPIRY_DAYS)
+    return datetime.now(timezone.utc) > expiry_date
+
+# Permissões por perfil
+ROLE_PERMISSIONS = {
+    'admin': ['all'],
+    'gestor': ['dashboard', 'entrega', 'colaboradores', 'empresas', 'epis', 'fornecedores', 'kits'],
+    'rh': ['dashboard', 'colaboradores', 'colaboradores_full', 'empresas', 'usuarios'],
+    'seguranca_trabalho': ['dashboard', 'epis', 'fornecedores', 'kits', 'colaboradores_list'],
+    'almoxarifado': ['dashboard', 'entrega', 'colaboradores_list']
+}
+
+def can_view_sensitive_data(role):
+    """Verifica se o perfil pode ver dados sensíveis (CPF, RG, etc)"""
+    return role in ['admin', 'gestor', 'rh']
+
+def can_manage_users(role):
+    """Verifica se pode gerenciar usuários"""
+    return role in ['admin', 'rh']
+
+def can_deliver_epi(role):
+    """Verifica se pode fazer entregas de EPI"""
+    return role in ['admin', 'gestor', 'almoxarifado']
+
+def can_manage_epis(role):
+    """Verifica se pode gerenciar EPIs"""
+    return role in ['admin', 'gestor', 'seguranca_trabalho']
+
+def can_manage_employees(role):
+    """Verifica se pode cadastrar/editar colaboradores"""
+    return role in ['admin', 'gestor', 'rh']
+
 # ===================== AUTH =====================
 
 @api_router.get('/')
@@ -72,8 +117,10 @@ async def login(request: LoginRequest):
         expires_at = license_doc['expires_at']
         if expires_at.tzinfo is None:
             expires_at = expires_at.replace(tzinfo=timezone.utc)
-        if now > expires_at and user['role'] != 'super_admin':
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Preciso ativar o Painel')
+        if now > expires_at and user['role'] != 'admin':
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Licença expirada')
+    
+    password_expired = check_password_expired(user)
     
     access_token = create_access_token(data={'sub': user['username'], 'role': user['role']})
     
@@ -81,6 +128,7 @@ async def login(request: LoginRequest):
         access_token=access_token,
         token_type='bearer',
         must_change_password=user.get('must_change_password', False),
+        password_expired=password_expired,
         role=UserRole(user['role'])
     )
 
@@ -92,7 +140,11 @@ async def change_password(request: ChangePasswordRequest, current_user: dict = D
     
     await db.users.update_one(
         {"_id": ObjectId(current_user['id'])},
-        {"$set": {"hashed_password": get_password_hash(request.new_password), "must_change_password": False}}
+        {"$set": {
+            "hashed_password": get_password_hash(request.new_password), 
+            "must_change_password": False,
+            "password_changed_at": datetime.now(timezone.utc)
+        }}
     )
     return {'message': 'Senha alterada com sucesso'}
 
@@ -105,6 +157,7 @@ async def get_me(current_user: dict = Depends(get_current_user)):
         role=UserRole(current_user['role']),
         is_active=current_user.get('is_active', True),
         must_change_password=current_user.get('must_change_password', False),
+        password_changed_at=current_user.get('password_changed_at'),
         employee_id=current_user.get('employee_id'),
         created_at=current_user.get('created_at', datetime.now(timezone.utc))
     )
@@ -112,14 +165,19 @@ async def get_me(current_user: dict = Depends(get_current_user)):
 # ===================== USERS =====================
 
 @api_router.get('/users', response_model=List[UserResponse])
-async def get_users(current_user: dict = Depends(require_role('super_admin', 'admin'))):
+async def get_users(current_user: dict = Depends(require_role('admin', 'rh'))):
     db = await get_db()
     users = await db.users.find({}).to_list(1000)
     return [UserResponse(**doc_to_response(u)) for u in users]
 
 @api_router.post('/users', response_model=UserResponse)
-async def create_user(user_data: UserCreate, current_user: dict = Depends(require_role('super_admin', 'admin'))):
+async def create_user(user_data: UserCreate, current_user: dict = Depends(require_role('admin', 'rh'))):
     db = await get_db()
+    
+    # RH não pode criar admins
+    if current_user['role'] == 'rh' and user_data.role == UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail='Sem permissão para criar administradores')
+    
     existing = await db.users.find_one({"$or": [{"username": user_data.username}, {"email": user_data.email}]})
     if existing:
         raise HTTPException(status_code=400, detail='Usuário ou email já existe')
@@ -132,6 +190,7 @@ async def create_user(user_data: UserCreate, current_user: dict = Depends(requir
         "employee_id": user_data.employee_id,
         "must_change_password": True,
         "is_active": True,
+        "password_changed_at": datetime.now(timezone.utc),
         "created_at": datetime.now(timezone.utc),
         "updated_at": datetime.now(timezone.utc)
     }
@@ -139,16 +198,39 @@ async def create_user(user_data: UserCreate, current_user: dict = Depends(requir
     new_user['_id'] = result.inserted_id
     return UserResponse(**doc_to_response(new_user))
 
+@api_router.patch('/users/{user_id}', response_model=UserResponse)
+async def update_user(user_id: str, user_data: UserUpdate, current_user: dict = Depends(require_role('admin'))):
+    db = await get_db()
+    update_data = {k: v for k, v in user_data.model_dump(exclude_unset=True).items()}
+    if 'role' in update_data:
+        update_data['role'] = update_data['role'].value
+    update_data['updated_at'] = datetime.now(timezone.utc)
+    
+    result = await db.users.find_one_and_update(
+        {"_id": ObjectId(user_id)}, {"$set": update_data}, return_document=True
+    )
+    if not result:
+        raise HTTPException(status_code=404, detail='Usuário não encontrado')
+    return UserResponse(**doc_to_response(result))
+
+@api_router.delete('/users/{user_id}')
+async def delete_user(user_id: str, current_user: dict = Depends(require_role('admin'))):
+    db = await get_db()
+    result = await db.users.delete_one({"_id": ObjectId(user_id)})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail='Usuário não encontrado')
+    return {'message': 'Usuário excluído'}
+
 # ===================== COMPANIES =====================
 
 @api_router.get('/companies', response_model=List[CompanyResponse])
-async def get_companies(current_user: dict = Depends(get_current_user)):
+async def get_companies(current_user: dict = Depends(require_role('admin', 'gestor', 'rh'))):
     db = await get_db()
     companies = await db.companies.find({}).to_list(1000)
     return [CompanyResponse(**doc_to_response(c)) for c in companies]
 
 @api_router.post('/companies', response_model=CompanyResponse)
-async def create_company(company_data: CompanyCreate, current_user: dict = Depends(get_current_user)):
+async def create_company(company_data: CompanyCreate, current_user: dict = Depends(require_role('admin', 'gestor', 'rh'))):
     db = await get_db()
     existing = await db.companies.find_one({"cnpj": company_data.cnpj})
     if existing:
@@ -160,7 +242,7 @@ async def create_company(company_data: CompanyCreate, current_user: dict = Depen
     return CompanyResponse(**doc_to_response(new_company))
 
 @api_router.get('/companies/{company_id}', response_model=CompanyResponse)
-async def get_company(company_id: str, current_user: dict = Depends(get_current_user)):
+async def get_company(company_id: str, current_user: dict = Depends(require_role('admin', 'gestor', 'rh'))):
     db = await get_db()
     company = await db.companies.find_one({"_id": ObjectId(company_id)})
     if not company:
@@ -168,7 +250,7 @@ async def get_company(company_id: str, current_user: dict = Depends(get_current_
     return CompanyResponse(**doc_to_response(company))
 
 @api_router.patch('/companies/{company_id}', response_model=CompanyResponse)
-async def update_company(company_id: str, company_data: CompanyUpdate, current_user: dict = Depends(get_current_user)):
+async def update_company(company_id: str, company_data: CompanyUpdate, current_user: dict = Depends(require_role('admin', 'gestor', 'rh'))):
     db = await get_db()
     update_data = {k: v for k, v in company_data.model_dump(exclude_unset=True).items()}
     update_data['updated_at'] = datetime.now(timezone.utc)
@@ -179,22 +261,42 @@ async def update_company(company_id: str, company_data: CompanyUpdate, current_u
         raise HTTPException(status_code=404, detail='Empresa não encontrada')
     return CompanyResponse(**doc_to_response(result))
 
+@api_router.delete('/companies/{company_id}')
+async def delete_company(company_id: str, current_user: dict = Depends(require_role('admin'))):
+    db = await get_db()
+    result = await db.companies.delete_one({"_id": ObjectId(company_id)})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail='Empresa não encontrada')
+    return {'message': 'Empresa excluída'}
+
 # ===================== EMPLOYEES =====================
 
-@api_router.get('/employees', response_model=List[EmployeeResponse])
-async def get_employees(current_user: dict = Depends(get_current_user), search: Optional[str] = None):
+@api_router.get('/employees')
+async def get_employees(current_user: dict = Depends(get_current_user), search: Optional[str] = None, company_id: Optional[str] = None):
     db = await get_db()
     query = {}
     if search:
-        query = {"$or": [
+        query["$or"] = [
             {"full_name": {"$regex": search, "$options": "i"}},
-            {"cpf": {"$regex": search, "$options": "i"}}
-        ]}
+            {"cpf": {"$regex": search, "$options": "i"}},
+            {"registration_number": {"$regex": search, "$options": "i"}}
+        ]
+    if company_id:
+        query["company_id"] = company_id
+    
     employees = await db.employees.find(query).to_list(1000)
+    
+    # Perfis que não podem ver dados sensíveis
+    if not can_view_sensitive_data(current_user['role']):
+        return [EmployeePublicResponse(**doc_to_response(e)) for e in employees]
+    
     return [EmployeeResponse(**doc_to_response(e)) for e in employees]
 
 @api_router.post('/employees', response_model=EmployeeResponse)
 async def create_employee(employee_data: EmployeeCreate, current_user: dict = Depends(get_current_user)):
+    if not can_manage_employees(current_user['role']):
+        raise HTTPException(status_code=403, detail='Sem permissão para cadastrar colaboradores')
+    
     db = await get_db()
     existing = await db.employees.find_one({"cpf": employee_data.cpf})
     if existing:
@@ -205,16 +307,23 @@ async def create_employee(employee_data: EmployeeCreate, current_user: dict = De
     new_employee['_id'] = result.inserted_id
     return EmployeeResponse(**doc_to_response(new_employee))
 
-@api_router.get('/employees/{employee_id}', response_model=EmployeeResponse)
+@api_router.get('/employees/{employee_id}')
 async def get_employee(employee_id: str, current_user: dict = Depends(get_current_user)):
     db = await get_db()
     employee = await db.employees.find_one({"_id": ObjectId(employee_id)})
     if not employee:
         raise HTTPException(status_code=404, detail='Colaborador não encontrado')
+    
+    if not can_view_sensitive_data(current_user['role']):
+        return EmployeePublicResponse(**doc_to_response(employee))
+    
     return EmployeeResponse(**doc_to_response(employee))
 
 @api_router.patch('/employees/{employee_id}', response_model=EmployeeResponse)
 async def update_employee(employee_id: str, employee_data: EmployeeUpdate, current_user: dict = Depends(get_current_user)):
+    if not can_manage_employees(current_user['role']):
+        raise HTTPException(status_code=403, detail='Sem permissão para editar colaboradores')
+    
     db = await get_db()
     update_data = {k: v for k, v in employee_data.model_dump(exclude_unset=True).items()}
     update_data['updated_at'] = datetime.now(timezone.utc)
@@ -225,8 +334,19 @@ async def update_employee(employee_id: str, employee_data: EmployeeUpdate, curre
         raise HTTPException(status_code=404, detail='Colaborador não encontrado')
     return EmployeeResponse(**doc_to_response(result))
 
+@api_router.delete('/employees/{employee_id}')
+async def delete_employee(employee_id: str, current_user: dict = Depends(require_role('admin'))):
+    db = await get_db()
+    result = await db.employees.delete_one({"_id": ObjectId(employee_id)})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail='Colaborador não encontrado')
+    return {'message': 'Colaborador excluído'}
+
 @api_router.post('/employees/{employee_id}/photo')
 async def upload_employee_photo(employee_id: str, file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
+    if not can_manage_employees(current_user['role']):
+        raise HTTPException(status_code=403, detail='Sem permissão')
+    
     db = await get_db()
     employee = await db.employees.find_one({"_id": ObjectId(employee_id)})
     if not employee:
@@ -244,87 +364,191 @@ async def upload_employee_photo(employee_id: str, file: UploadFile = File(...), 
     await db.employees.update_one({"_id": ObjectId(employee_id)}, {"$set": {"photo_path": photo_path}})
     return {'photo_path': photo_path}
 
+# ===================== FACIAL TEMPLATES =====================
+
+@api_router.get('/employees/{employee_id}/facial-templates')
+async def get_facial_templates(employee_id: str, current_user: dict = Depends(get_current_user)):
+    db = await get_db()
+    templates = await db.facial_templates.find({"employee_id": employee_id}).to_list(100)
+    return [doc_to_response(t) for t in templates]
+
+@api_router.post('/employees/{employee_id}/facial-templates')
+async def create_facial_template(employee_id: str, template_data: FacialTemplateCreate, current_user: dict = Depends(get_current_user)):
+    if not can_manage_employees(current_user['role']):
+        raise HTTPException(status_code=403, detail='Sem permissão')
+    
+    db = await get_db()
+    employee = await db.employees.find_one({"_id": ObjectId(employee_id)})
+    if not employee:
+        raise HTTPException(status_code=404, detail='Colaborador não encontrado')
+    
+    new_template = {
+        "employee_id": employee_id,
+        "descriptor": template_data.descriptor,
+        "created_at": datetime.now(timezone.utc)
+    }
+    result = await db.facial_templates.insert_one(new_template)
+    new_template['_id'] = result.inserted_id
+    return doc_to_response(new_template)
+
 # ===================== SUPPLIERS =====================
 
 @api_router.get('/suppliers', response_model=List[SupplierResponse])
-async def get_suppliers(current_user: dict = Depends(get_current_user)):
+async def get_suppliers(current_user: dict = Depends(require_role('admin', 'gestor', 'seguranca_trabalho'))):
     db = await get_db()
     suppliers = await db.suppliers.find({}).to_list(1000)
     return [SupplierResponse(**doc_to_response(s)) for s in suppliers]
 
 @api_router.post('/suppliers', response_model=SupplierResponse)
-async def create_supplier(supplier_data: SupplierCreate, current_user: dict = Depends(get_current_user)):
+async def create_supplier(supplier_data: SupplierCreate, current_user: dict = Depends(require_role('admin', 'gestor', 'seguranca_trabalho'))):
     db = await get_db()
     new_supplier = {**supplier_data.model_dump(), "created_at": datetime.now(timezone.utc)}
     result = await db.suppliers.insert_one(new_supplier)
     new_supplier['_id'] = result.inserted_id
     return SupplierResponse(**doc_to_response(new_supplier))
 
+@api_router.patch('/suppliers/{supplier_id}', response_model=SupplierResponse)
+async def update_supplier(supplier_id: str, supplier_data: SupplierUpdate, current_user: dict = Depends(require_role('admin', 'gestor', 'seguranca_trabalho'))):
+    db = await get_db()
+    update_data = {k: v for k, v in supplier_data.model_dump(exclude_unset=True).items()}
+    update_data['updated_at'] = datetime.now(timezone.utc)
+    result = await db.suppliers.find_one_and_update(
+        {"_id": ObjectId(supplier_id)}, {"$set": update_data}, return_document=True
+    )
+    if not result:
+        raise HTTPException(status_code=404, detail='Fornecedor não encontrado')
+    return SupplierResponse(**doc_to_response(result))
+
+@api_router.delete('/suppliers/{supplier_id}')
+async def delete_supplier(supplier_id: str, current_user: dict = Depends(require_role('admin'))):
+    db = await get_db()
+    result = await db.suppliers.delete_one({"_id": ObjectId(supplier_id)})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail='Fornecedor não encontrado')
+    return {'message': 'Fornecedor excluído'}
+
 # ===================== EPIS =====================
 
+def calculate_epi_status(epi):
+    """Calcula status de estoque e validade do EPI"""
+    stock_status = 'ok'
+    validity_status = 'ok'
+    
+    # Status de estoque
+    if epi.get('current_stock', 0) <= 0:
+        stock_status = 'out'
+    elif epi.get('current_stock', 0) <= epi.get('min_stock', 0):
+        stock_status = 'low'
+    
+    # Status de validade
+    validity_date = epi.get('validity_date') or epi.get('ca_validity')
+    if validity_date:
+        if validity_date.tzinfo is None:
+            validity_date = validity_date.replace(tzinfo=timezone.utc)
+        
+        now = datetime.now(timezone.utc)
+        days_until_expiry = (validity_date - now).days
+        
+        if days_until_expiry < 0:
+            validity_status = 'expired'
+        elif days_until_expiry <= 30:
+            validity_status = 'expiring'
+    
+    return stock_status, validity_status
+
 @api_router.get('/epis', response_model=List[EPIResponse])
-async def get_epis(current_user: dict = Depends(get_current_user)):
+async def get_epis(current_user: dict = Depends(require_role('admin', 'gestor', 'seguranca_trabalho', 'almoxarifado'))):
     db = await get_db()
     epis = await db.epis.find({}).to_list(1000)
-    return [EPIResponse(**doc_to_response(e)) for e in epis]
+    
+    result = []
+    for e in epis:
+        stock_status, validity_status = calculate_epi_status(e)
+        resp = doc_to_response(e)
+        resp['stock_status'] = stock_status
+        resp['validity_status'] = validity_status
+        result.append(EPIResponse(**resp))
+    
+    return result
 
 @api_router.post('/epis', response_model=EPIResponse)
-async def create_epi(epi_data: EPICreate, current_user: dict = Depends(get_current_user)):
+async def create_epi(epi_data: EPICreate, current_user: dict = Depends(require_role('admin', 'gestor', 'seguranca_trabalho'))):
     db = await get_db()
     new_epi = {**epi_data.model_dump(), "created_by": current_user['id'], "created_at": datetime.now(timezone.utc), "updated_at": datetime.now(timezone.utc)}
     result = await db.epis.insert_one(new_epi)
     new_epi['_id'] = result.inserted_id
-    return EPIResponse(**doc_to_response(new_epi))
+    stock_status, validity_status = calculate_epi_status(new_epi)
+    resp = doc_to_response(new_epi)
+    resp['stock_status'] = stock_status
+    resp['validity_status'] = validity_status
+    return EPIResponse(**resp)
 
 @api_router.get('/epis/{epi_id}', response_model=EPIResponse)
-async def get_epi(epi_id: str, current_user: dict = Depends(get_current_user)):
+async def get_epi(epi_id: str, current_user: dict = Depends(require_role('admin', 'gestor', 'seguranca_trabalho', 'almoxarifado'))):
     db = await get_db()
     epi = await db.epis.find_one({"_id": ObjectId(epi_id)})
     if not epi:
         raise HTTPException(status_code=404, detail='EPI não encontrado')
-    return EPIResponse(**doc_to_response(epi))
+    stock_status, validity_status = calculate_epi_status(epi)
+    resp = doc_to_response(epi)
+    resp['stock_status'] = stock_status
+    resp['validity_status'] = validity_status
+    return EPIResponse(**resp)
 
 @api_router.patch('/epis/{epi_id}', response_model=EPIResponse)
-async def update_epi(epi_id: str, epi_data: EPIUpdate, current_user: dict = Depends(get_current_user)):
+async def update_epi(epi_id: str, epi_data: EPIUpdate, current_user: dict = Depends(require_role('admin', 'gestor', 'seguranca_trabalho'))):
     db = await get_db()
     update_data = {k: v for k, v in epi_data.model_dump(exclude_unset=True).items()}
     update_data['updated_at'] = datetime.now(timezone.utc)
     result = await db.epis.find_one_and_update({"_id": ObjectId(epi_id)}, {"$set": update_data}, return_document=True)
     if not result:
         raise HTTPException(status_code=404, detail='EPI não encontrado')
-    return EPIResponse(**doc_to_response(result))
+    stock_status, validity_status = calculate_epi_status(result)
+    resp = doc_to_response(result)
+    resp['stock_status'] = stock_status
+    resp['validity_status'] = validity_status
+    return EPIResponse(**resp)
 
-# ===================== TOOLS =====================
-
-@api_router.get('/tools', response_model=List[ToolResponse])
-async def get_tools(current_user: dict = Depends(get_current_user)):
+@api_router.delete('/epis/{epi_id}')
+async def delete_epi(epi_id: str, current_user: dict = Depends(require_role('admin'))):
     db = await get_db()
-    tools = await db.tools.find({}).to_list(1000)
-    return [ToolResponse(**doc_to_response(t)) for t in tools]
-
-@api_router.post('/tools', response_model=ToolResponse)
-async def create_tool(tool_data: ToolCreate, current_user: dict = Depends(get_current_user)):
-    db = await get_db()
-    new_tool = {**tool_data.model_dump(), "created_at": datetime.now(timezone.utc), "updated_at": datetime.now(timezone.utc)}
-    result = await db.tools.insert_one(new_tool)
-    new_tool['_id'] = result.inserted_id
-    return ToolResponse(**doc_to_response(new_tool))
+    result = await db.epis.delete_one({"_id": ObjectId(epi_id)})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail='EPI não encontrado')
+    return {'message': 'EPI excluído'}
 
 # ===================== KITS =====================
 
 @api_router.get('/kits', response_model=List[KitResponse])
-async def get_kits(current_user: dict = Depends(get_current_user)):
+async def get_kits(current_user: dict = Depends(require_role('admin', 'gestor', 'seguranca_trabalho', 'almoxarifado'))):
     db = await get_db()
     kits = await db.kits.find({}).to_list(1000)
     return [KitResponse(**doc_to_response(k)) for k in kits]
 
 @api_router.post('/kits', response_model=KitResponse)
-async def create_kit(kit_data: KitCreate, current_user: dict = Depends(get_current_user)):
+async def create_kit(kit_data: KitCreate, current_user: dict = Depends(require_role('admin', 'gestor', 'seguranca_trabalho'))):
     db = await get_db()
+    
+    # Buscar detalhes dos EPIs para armazenar nome e descrição
+    items_with_details = []
+    for item in kit_data.items:
+        if item.epi_id:
+            epi = await db.epis.find_one({"_id": ObjectId(item.epi_id)})
+            if epi:
+                items_with_details.append({
+                    "epi_id": item.epi_id,
+                    "name": epi['name'],
+                    "type_category": epi.get('type_category', ''),
+                    "ca_number": epi.get('ca_number', ''),
+                    "size": epi.get('size', ''),
+                    "quantity": item.quantity
+                })
+    
     new_kit = {
         "name": kit_data.name,
         "description": kit_data.description,
-        "items": [item.model_dump() for item in kit_data.items],
+        "sector": kit_data.sector,
+        "items": items_with_details,
         "created_at": datetime.now(timezone.utc),
         "updated_at": datetime.now(timezone.utc)
     }
@@ -332,15 +556,75 @@ async def create_kit(kit_data: KitCreate, current_user: dict = Depends(get_curre
     new_kit['_id'] = result.inserted_id
     return KitResponse(**doc_to_response(new_kit))
 
+@api_router.get('/kits/{kit_id}', response_model=KitResponse)
+async def get_kit(kit_id: str, current_user: dict = Depends(get_current_user)):
+    db = await get_db()
+    kit = await db.kits.find_one({"_id": ObjectId(kit_id)})
+    if not kit:
+        raise HTTPException(status_code=404, detail='Kit não encontrado')
+    return KitResponse(**doc_to_response(kit))
+
+@api_router.patch('/kits/{kit_id}', response_model=KitResponse)
+async def update_kit(kit_id: str, kit_data: KitUpdate, current_user: dict = Depends(require_role('admin', 'gestor', 'seguranca_trabalho'))):
+    db = await get_db()
+    update_data = {}
+    
+    if kit_data.name is not None:
+        update_data['name'] = kit_data.name
+    if kit_data.description is not None:
+        update_data['description'] = kit_data.description
+    if kit_data.sector is not None:
+        update_data['sector'] = kit_data.sector
+    
+    if kit_data.items is not None:
+        items_with_details = []
+        for item in kit_data.items:
+            if item.epi_id:
+                epi = await db.epis.find_one({"_id": ObjectId(item.epi_id)})
+                if epi:
+                    items_with_details.append({
+                        "epi_id": item.epi_id,
+                        "name": epi['name'],
+                        "type_category": epi.get('type_category', ''),
+                        "ca_number": epi.get('ca_number', ''),
+                        "size": epi.get('size', ''),
+                        "quantity": item.quantity
+                    })
+        update_data['items'] = items_with_details
+    
+    update_data['updated_at'] = datetime.now(timezone.utc)
+    
+    result = await db.kits.find_one_and_update(
+        {"_id": ObjectId(kit_id)}, {"$set": update_data}, return_document=True
+    )
+    if not result:
+        raise HTTPException(status_code=404, detail='Kit não encontrado')
+    return KitResponse(**doc_to_response(result))
+
+@api_router.delete('/kits/{kit_id}')
+async def delete_kit(kit_id: str, current_user: dict = Depends(require_role('admin'))):
+    db = await get_db()
+    result = await db.kits.delete_one({"_id": ObjectId(kit_id)})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail='Kit não encontrado')
+    return {'message': 'Kit excluído'}
+
 # ===================== DELIVERIES =====================
 
 @api_router.post('/deliveries', response_model=DeliveryResponse)
 async def create_delivery(delivery_data: DeliveryCreate, current_user: dict = Depends(get_current_user)):
+    if not can_deliver_epi(current_user['role']):
+        raise HTTPException(status_code=403, detail='Sem permissão para realizar entregas')
+    
     db = await get_db()
     
     employee = await db.employees.find_one({"_id": ObjectId(delivery_data.employee_id)})
     if not employee:
         raise HTTPException(status_code=404, detail='Colaborador não encontrado')
+    
+    # Verificar se colaborador tem foto cadastrada
+    if not employee.get('photo_path'):
+        raise HTTPException(status_code=400, detail='Colaborador não possui foto cadastrada. Procure o RH para cadastrar.')
     
     items_list = []
     for item in delivery_data.items:
@@ -350,6 +634,7 @@ async def create_delivery(delivery_data: DeliveryCreate, current_user: dict = De
             epi = await db.epis.find_one({"_id": ObjectId(item.epi_id)})
             if epi:
                 item_dict['epi_name'] = epi['name']
+                item_dict['ca_number'] = epi.get('ca_number', '')
                 stock_change = -item.quantity if not delivery_data.is_return else item.quantity
                 await db.epis.update_one({"_id": ObjectId(item.epi_id)}, {"$inc": {"current_stock": stock_change}})
                 
@@ -357,15 +642,21 @@ async def create_delivery(delivery_data: DeliveryCreate, current_user: dict = De
                     "movement_type": "return" if delivery_data.is_return else "delivery",
                     "epi_id": item.epi_id,
                     "quantity": item.quantity if delivery_data.is_return else -item.quantity,
+                    "employee_id": delivery_data.employee_id,
                     "created_by": current_user['id'],
                     "created_at": datetime.now(timezone.utc)
                 }
                 await db.stock_movements.insert_one(movement)
         
-        if item.tool_id:
-            tool = await db.tools.find_one({"_id": ObjectId(item.tool_id)})
-            if tool:
-                item_dict['tool_name'] = tool['name']
+        if item.kit_id:
+            kit = await db.kits.find_one({"_id": ObjectId(item.kit_id)})
+            if kit:
+                item_dict['kit_name'] = kit['name']
+                # Processar itens do kit
+                for kit_item in kit.get('items', []):
+                    if kit_item.get('epi_id'):
+                        stock_change = -kit_item['quantity'] if not delivery_data.is_return else kit_item['quantity']
+                        await db.epis.update_one({"_id": ObjectId(kit_item['epi_id'])}, {"$inc": {"current_stock": stock_change}})
         
         items_list.append(item_dict)
     
@@ -375,21 +666,65 @@ async def create_delivery(delivery_data: DeliveryCreate, current_user: dict = De
         "delivery_type": delivery_data.delivery_type,
         "is_return": delivery_data.is_return,
         "facial_match_score": delivery_data.facial_match_score,
+        "facial_photo_path": delivery_data.facial_photo_path,
         "notes": delivery_data.notes,
         "items": items_list,
         "delivered_by": current_user['id'],
+        "delivered_by_name": current_user['username'],
         "created_at": datetime.now(timezone.utc)
     }
     result = await db.deliveries.insert_one(new_delivery)
     new_delivery['_id'] = result.inserted_id
     return DeliveryResponse(**doc_to_response(new_delivery))
 
+@api_router.post('/deliveries/save-photo')
+async def save_delivery_photo(
+    employee_id: str = Form(...),
+    photo_data: str = Form(...),
+    current_user: dict = Depends(get_current_user)
+):
+    """Salva a foto de confirmação da entrega"""
+    if not can_deliver_epi(current_user['role']):
+        raise HTTPException(status_code=403, detail='Sem permissão')
+    
+    try:
+        # Decodificar base64
+        if ',' in photo_data:
+            photo_data = photo_data.split(',')[1]
+        
+        photo_bytes = base64.b64decode(photo_data)
+        
+        file_name = f'delivery_{employee_id}_{datetime.now(timezone.utc).timestamp()}.jpg'
+        file_path = UPLOAD_DIR / 'deliveries' / file_name
+        file_path.parent.mkdir(exist_ok=True, parents=True)
+        
+        with open(file_path, 'wb') as f:
+            f.write(photo_bytes)
+        
+        return {'photo_path': f'/uploads/deliveries/{file_name}'}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f'Erro ao salvar foto: {str(e)}')
+
 @api_router.get('/deliveries', response_model=List[DeliveryResponse])
-async def get_deliveries(current_user: dict = Depends(get_current_user), employee_id: Optional[str] = None):
+async def get_deliveries(
+    current_user: dict = Depends(get_current_user), 
+    employee_id: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None
+):
     db = await get_db()
     query = {}
     if employee_id:
         query['employee_id'] = employee_id
+    
+    if start_date:
+        query['created_at'] = query.get('created_at', {})
+        query['created_at']['$gte'] = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
+    
+    if end_date:
+        query['created_at'] = query.get('created_at', {})
+        query['created_at']['$lte'] = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+    
     deliveries = await db.deliveries.find(query).sort("created_at", -1).to_list(1000)
     return [DeliveryResponse(**doc_to_response(d)) for d in deliveries]
 
@@ -399,16 +734,21 @@ async def get_deliveries(current_user: dict = Depends(get_current_user), employe
 async def get_stock_alerts(current_user: dict = Depends(get_current_user)):
     db = await get_db()
     
+    # EPIs com estoque baixo
     low_stock = await db.epis.find({"$expr": {"$lte": ["$current_stock", "$min_stock"]}}).to_list(100)
     
+    # EPIs com validade próxima (30 dias)
     expiry_date = datetime.now(timezone.utc) + timedelta(days=30)
     expiring_soon = await db.epis.find({
-        "validity_date": {"$ne": None, "$lte": expiry_date}
+        "$or": [
+            {"validity_date": {"$ne": None, "$lte": expiry_date}},
+            {"ca_validity": {"$ne": None, "$lte": expiry_date}}
+        ]
     }).to_list(100)
     
     return {
         'low_stock': [{'id': str(e['_id']), 'name': e['name'], 'current_stock': e['current_stock'], 'min_stock': e['min_stock']} for e in low_stock],
-        'expiring_soon': [{'id': str(e['_id']), 'name': e['name'], 'validity_date': e.get('validity_date')} for e in expiring_soon]
+        'expiring_soon': [{'id': str(e['_id']), 'name': e['name'], 'validity_date': e.get('validity_date') or e.get('ca_validity')} for e in expiring_soon]
     }
 
 @api_router.get('/stock/movements')
@@ -423,14 +763,18 @@ async def get_stock_movements(current_user: dict = Depends(get_current_user), ep
 # ===================== LICENSE =====================
 
 @api_router.get('/license', response_model=LicenseResponse)
-async def get_license(current_user: dict = Depends(require_role('super_admin'))):
+async def get_license(current_user: dict = Depends(require_role('admin'))):
     db = await get_db()
     license_doc = await db.panel_license.find_one({})
     if not license_doc:
         raise HTTPException(status_code=404, detail='Licença não encontrada')
     
     now = datetime.now(timezone.utc)
-    days_remaining = max(0, (license_doc['expires_at'] - now).days)
+    expires_at = license_doc['expires_at']
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    
+    days_remaining = max(0, (expires_at - now).days)
     
     return LicenseResponse(
         id=str(license_doc['_id']),
@@ -440,7 +784,7 @@ async def get_license(current_user: dict = Depends(require_role('super_admin')))
     )
 
 @api_router.post('/license/add-days')
-async def add_license_days(request: LicenseAddDaysRequest, current_user: dict = Depends(require_role('super_admin'))):
+async def add_license_days(request: LicenseAddDaysRequest, current_user: dict = Depends(require_role('admin'))):
     db = await get_db()
     license_doc = await db.panel_license.find_one({})
     if not license_doc:
@@ -460,107 +804,6 @@ async def add_license_days(request: LicenseAddDaysRequest, current_user: dict = 
     
     return {'message': f'{request.days} dias adicionados com sucesso'}
 
-# ===================== DOCUMENTS =====================
-
-@api_router.get('/document-templates', response_model=List[DocumentTemplateResponse])
-async def get_document_templates(current_user: dict = Depends(get_current_user)):
-    db = await get_db()
-    templates = await db.document_templates.find({"is_active": True}).to_list(100)
-    return [DocumentTemplateResponse(**doc_to_response(t)) for t in templates]
-
-@api_router.post('/document-templates', response_model=DocumentTemplateResponse)
-async def create_document_template(template_data: DocumentTemplateCreate, current_user: dict = Depends(get_current_user)):
-    db = await get_db()
-    new_template = {**template_data.model_dump(), "is_active": True, "created_at": datetime.now(timezone.utc), "updated_at": datetime.now(timezone.utc)}
-    result = await db.document_templates.insert_one(new_template)
-    new_template['_id'] = result.inserted_id
-    return DocumentTemplateResponse(**doc_to_response(new_template))
-
-@api_router.delete('/document-templates/{template_id}')
-async def delete_document_template(template_id: str, current_user: dict = Depends(get_current_user)):
-    db = await get_db()
-    result = await db.document_templates.delete_one({"_id": ObjectId(template_id)})
-    if result.deleted_count == 0:
-        raise HTTPException(status_code=404, detail='Modelo não encontrado')
-    return {'message': 'Modelo excluído'}
-
-@api_router.get('/document-signatures', response_model=List[DocumentSignatureResponse])
-async def get_document_signatures(current_user: dict = Depends(get_current_user), employee_id: Optional[str] = None):
-    db = await get_db()
-    query = {}
-    if employee_id:
-        query['employee_id'] = employee_id
-    signatures = await db.document_signatures.find(query).sort("signed_at", -1).to_list(500)
-    return [DocumentSignatureResponse(**doc_to_response(s)) for s in signatures]
-
-@api_router.post('/document-signatures', response_model=DocumentSignatureResponse)
-async def create_document_signature(sig_data: DocumentSignatureCreate, current_user: dict = Depends(get_current_user)):
-    db = await get_db()
-    
-    template = await db.document_templates.find_one({"_id": ObjectId(sig_data.template_id)})
-    employee = await db.employees.find_one({"_id": ObjectId(sig_data.employee_id)})
-    
-    if not template or not employee:
-        raise HTTPException(status_code=404, detail='Template ou colaborador não encontrado')
-    
-    signature_path = None
-    if sig_data.signature_data:
-        import base64
-        sig_filename = f'sig_{sig_data.employee_id}_{datetime.now(timezone.utc).timestamp()}.png'
-        sig_path = UPLOAD_DIR / 'signatures' / sig_filename
-        sig_path.parent.mkdir(exist_ok=True, parents=True)
-        
-        sig_bytes = base64.b64decode(sig_data.signature_data.split(',')[1] if ',' in sig_data.signature_data else sig_data.signature_data)
-        with open(sig_path, 'wb') as f:
-            f.write(sig_bytes)
-        signature_path = f'/uploads/signatures/{sig_filename}'
-    
-    new_sig = {
-        "template_id": sig_data.template_id,
-        "template_name": template['name'],
-        "employee_id": sig_data.employee_id,
-        "employee_name": employee['full_name'],
-        "signature_image_path": signature_path,
-        "signed_by_user": current_user['id'],
-        "signed_at": datetime.now(timezone.utc)
-    }
-    result = await db.document_signatures.insert_one(new_sig)
-    new_sig['_id'] = result.inserted_id
-    return DocumentSignatureResponse(**doc_to_response(new_sig))
-
-# ===================== EXTERNAL TEAMS =====================
-
-@api_router.get('/external-teams', response_model=List[ExternalTeamResponse])
-async def get_external_teams(current_user: dict = Depends(get_current_user)):
-    db = await get_db()
-    teams = await db.external_teams.find({}).to_list(1000)
-    return [ExternalTeamResponse(**doc_to_response(t)) for t in teams]
-
-@api_router.post('/external-teams', response_model=ExternalTeamResponse)
-async def create_external_team(team_data: ExternalTeamCreate, current_user: dict = Depends(get_current_user)):
-    db = await get_db()
-    new_team = {**team_data.model_dump(), "created_at": datetime.now(timezone.utc), "updated_at": datetime.now(timezone.utc)}
-    result = await db.external_teams.insert_one(new_team)
-    new_team['_id'] = result.inserted_id
-    return ExternalTeamResponse(**doc_to_response(new_team))
-
-@api_router.get('/external-members', response_model=List[ExternalMemberResponse])
-async def get_external_members(current_user: dict = Depends(get_current_user), team_id: Optional[str] = None):
-    db = await get_db()
-    query = {}
-    if team_id:
-        query['team_id'] = team_id
-    members = await db.external_members.find(query).to_list(1000)
-    return [ExternalMemberResponse(**doc_to_response(m)) for m in members]
-
-@api_router.post('/external-members', response_model=ExternalMemberResponse)
-async def create_external_member(member_data: ExternalMemberCreate, current_user: dict = Depends(get_current_user)):
-    db = await get_db()
-    new_member = {**member_data.model_dump(), "created_at": datetime.now(timezone.utc)}
-    result = await db.external_members.insert_one(new_member)
-    new_member['_id'] = result.inserted_id
-    return ExternalMemberResponse(**doc_to_response(new_member))
-
 # ===================== DASHBOARD =====================
 
 @api_router.get('/dashboard/stats')
@@ -577,11 +820,21 @@ async def get_dashboard_stats(current_user: dict = Depends(get_current_user)):
         "created_at": {"$gte": thirty_days_ago}
     })
     
+    # EPIs com validade próxima
+    expiry_date = datetime.now(timezone.utc) + timedelta(days=30)
+    expiring_count = await db.epis.count_documents({
+        "$or": [
+            {"validity_date": {"$ne": None, "$lte": expiry_date}},
+            {"ca_validity": {"$ne": None, "$lte": expiry_date}}
+        ]
+    })
+    
     return {
         'active_employees': active_employees,
         'total_epis': total_epis,
         'low_stock_count': low_stock_count,
-        'recent_deliveries': recent_deliveries
+        'recent_deliveries': recent_deliveries,
+        'expiring_epis': expiring_count
     }
 
 app.include_router(api_router)
