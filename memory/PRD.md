@@ -17,6 +17,7 @@ O usuário solicitou um sistema completo com:
 - **Backend:** FastAPI (Python), MongoDB com motor (assíncrono)
 - **Frontend:** React, TailwindCSS, Shadcn/UI
 - **Autenticação:** JWT com políticas de senha e expiração (30 dias)
+- **Reconhecimento Facial:** face-api.js (TensorFlow.js)
 
 ## Credenciais de Teste
 - **Admin:** administrador / LR1a2b3c4567@
@@ -34,28 +35,25 @@ O usuário solicitou um sistema completo com:
 - [x] Políticas de senha (complexidade + expiração 30 dias)
 - [x] Dashboard com cards interativos (dados estáticos)
 - [x] Cadastro de Empresas, Fornecedores, EPIs
-- [x] Gestão de Kits com EPIs
+- [x] Gestão de Kits com EPIs (bug de descrição corrigido)
 - [x] Gestão de Colaboradores com foto
-- [x] Tela de Entrega de EPI (UI para reconhecimento facial)
+- [x] Tela de Entrega de EPI com reconhecimento facial obrigatório
 - [x] Tela de Configurações (contador de licença)
 - [x] Tela de Usuários com gestão de perfis e reset de senha
 - [x] Ícone da empresa no login e sidebar
 - [x] Layout de tabela com ações em Empresas, Fornecedores, Kits
 
-### 🔧 Corrigido Hoje (06/02/2026)
-- [x] **Bug Kits:** Descrição dos itens (EPIs) agora exibe corretamente em visualização, edição e impressão
-- [x] **Bug Sidebar:** Ícone da empresa agora carrega corretamente no menu lateral
+### ✅ Implementado Hoje (06/02/2026)
+- [x] **Reconhecimento Facial Completo:**
+  - Modelos face-api.js baixados (tiny_face_detector, face_landmark_68, face_recognition)
+  - Aba "Biometria Facial" na ficha do colaborador
+  - Cadastro de templates faciais via webcam
+  - Comparação de faces na entrega de EPI
+  - Endpoints: GET, POST, DELETE /api/employees/{id}/facial-templates
 
 ---
 
 ## Backlog Priorizado
-
-### P0 - Crítico
-- [ ] **Implementar Reconhecimento Facial Real**
-  - Integrar face-api.js ou similar
-  - Capturar imagem da webcam
-  - Processar e comparar com templates cadastrados
-  - Retornar colaborador correspondente
 
 ### P1 - Alta Prioridade
 - [ ] **Dashboard Dinâmico (BI)**
@@ -93,11 +91,18 @@ O usuário solicitou um sistema completo com:
 │   └── tests/          # Testes pytest
 └── frontend/
     ├── public/
-    │   └── icone-cipolatti.png
+    │   ├── icone-cipolatti.png
+    │   └── models/     # Modelos face-api.js
+    │       ├── tiny_face_detector_model-*
+    │       ├── face_landmark_68_model-*
+    │       └── face_recognition_model-*
     ├── src/
-    │   ├── pages/      # Login, Dashboard, Kits, etc.
-    │   ├── components/ # Layout, Sidebar
-    │   └── contexts/   # AuthContext
+    │   ├── pages/
+    │   │   ├── ColaboradorDetalhes.js  # Aba Biometria
+    │   │   ├── EntregaEPI.js           # Reconhecimento facial
+    │   │   └── ...
+    │   ├── components/
+    │   └── contexts/
     └── .env
 ```
 
@@ -105,6 +110,13 @@ O usuário solicitou um sistema completo com:
 - POST /api/auth/login
 - GET /api/auth/me
 - CRUD /api/users, /api/companies, /api/employees, /api/epis, /api/kits, /api/suppliers
+- GET, POST, DELETE /api/employees/{id}/facial-templates
 - POST /api/deliveries
 - GET /api/license, POST /api/license/add-days
 - GET /api/dashboard/stats
+
+## Fluxo de Reconhecimento Facial
+1. **Cadastrar colaborador** com foto (tela Colaboradores)
+2. **Cadastrar template facial** na aba Biometria da ficha do colaborador
+3. **Entrega de EPI:** Sistema compara rosto capturado com templates cadastrados
+4. Se match >= 50%, identifica colaborador e libera entrega
