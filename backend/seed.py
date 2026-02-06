@@ -9,23 +9,31 @@ logger = logging.getLogger(__name__)
 async def seed_database():
     db = await get_db()
     
-    # Create super admin
+    # Criar admin (substitui super_admin)
     existing_user = await db.users.find_one({"username": "administrador"})
     if not existing_user:
-        super_admin = {
+        admin = {
             "username": "administrador",
             "email": "admin@cipolatti.com",
             "hashed_password": get_password_hash("LR1a2b3c4567@"),
-            "role": "super_admin",
+            "role": "admin",  # Novo perfil
             "must_change_password": True,
             "is_active": True,
+            "password_changed_at": datetime.now(timezone.utc),
             "created_at": datetime.now(timezone.utc),
             "updated_at": datetime.now(timezone.utc)
         }
-        await db.users.insert_one(super_admin)
-        logger.info("Super-administrador criado: administrador")
+        await db.users.insert_one(admin)
+        logger.info("Administrador criado: administrador")
+    else:
+        # Atualizar perfil para o novo sistema
+        if existing_user.get('role') in ['super_admin', 'admin']:
+            await db.users.update_one(
+                {"_id": existing_user['_id']},
+                {"$set": {"role": "admin"}}
+            )
     
-    # Create license
+    # Criar licença
     existing_license = await db.panel_license.find_one({})
     if not existing_license:
         license_doc = {
