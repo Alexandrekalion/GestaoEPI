@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { Search, Camera, QrCode, User, Package, CheckCircle2, ScanFace, Keyboard, Eye, AlertTriangle, History } from 'lucide-react';
+import { Camera, QrCode, User, Package, CheckCircle2, ScanFace, History, AlertTriangle, X } from 'lucide-react';
 import Webcam from 'react-webcam';
 import { Html5QrcodeScanner } from 'html5-qrcode';
 import axios from 'axios';
@@ -13,16 +13,14 @@ const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
 export default function EntregaEPI() {
-  const [step, setStep] = useState('search');
-  const [searchMode, setSearchMode] = useState('manual'); // 'manual' ou 'facial'
-  const [searchTerm, setSearchTerm] = useState('');
-  const [employees, setEmployees] = useState([]);
+  const [step, setStep] = useState('facial');
   const [allEmployees, setAllEmployees] = useState([]);
   const [selectedEmployee, setSelectedEmployee] = useState(null);
-  const [showWebcam, setShowWebcam] = useState(false);
+  const [showWebcam, setShowWebcam] = useState(true);
   const [showQRScanner, setShowQRScanner] = useState(false);
   const [facialMatch, setFacialMatch] = useState(null);
   const [epis, setEpis] = useState([]);
+  const [kits, setKits] = useState([]);
   const [selectedItems, setSelectedItems] = useState([]);
   const [deliveryType, setDeliveryType] = useState('delivery');
   const [loading, setLoading] = useState(false);
@@ -30,6 +28,7 @@ export default function EntregaEPI() {
   const [employeeHistory, setEmployeeHistory] = useState([]);
   const [employeeCurrentItems, setEmployeeCurrentItems] = useState([]);
   const [showHistoryDialog, setShowHistoryDialog] = useState(false);
+  const [capturedPhoto, setCapturedPhoto] = useState(null);
   
   const webcamRef = useRef(null);
   const qrScannerRef = useRef(null);
@@ -37,6 +36,7 @@ export default function EntregaEPI() {
   useEffect(() => {
     loadFaceModels();
     fetchEPIs();
+    fetchKits();
     fetchAllEmployees();
   }, []);
 
@@ -50,6 +50,7 @@ export default function EntregaEPI() {
       setModelsLoaded(true);
     } catch (error) {
       console.error('Erro ao carregar modelos faciais:', error);
+      toast.error('Erro ao carregar modelos de reconhecimento facial');
     }
   };
 
@@ -62,29 +63,21 @@ export default function EntregaEPI() {
     }
   };
 
+  const fetchKits = async () => {
+    try {
+      const response = await axios.get(`${API}/kits`, { headers: getAuthHeader() });
+      setKits(response.data);
+    } catch (error) {
+      console.error('Erro ao buscar Kits:', error);
+    }
+  };
+
   const fetchAllEmployees = async () => {
     try {
       const response = await axios.get(`${API}/employees`, { headers: getAuthHeader() });
       setAllEmployees(response.data);
     } catch (error) {
       console.error('Erro ao buscar colaboradores:', error);
-    }
-  };
-
-  const searchEmployees = async () => {
-    if (!searchTerm.trim()) return;
-    
-    setLoading(true);
-    try {
-      const response = await axios.get(`${API}/employees?search=${searchTerm}`, {
-        headers: getAuthHeader()
-      });
-      setEmployees(response.data);
-    } catch (error) {
-      console.error('Erro ao buscar colaboradores:', error);
-      toast.error('Erro ao buscar colaboradores');
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -95,13 +88,12 @@ export default function EntregaEPI() {
       });
       setEmployeeHistory(response.data);
       
-      // Calcular itens atuais (entregas - devoluções)
       const itemsMap = {};
       response.data.forEach(delivery => {
         if (delivery.items) {
           delivery.items.forEach(item => {
-            const key = item.epi_id || item.tool_id;
-            const name = item.epi_name || item.tool_name || item.name;
+            const key = item.epi_id || item.name;
+            const name = item.epi_name || item.name;
             if (!itemsMap[key]) {
               itemsMap[key] = { name, quantity: 0, deliveries: [] };
             }
@@ -124,21 +116,10 @@ export default function EntregaEPI() {
     }
   };
 
-  const selectEmployee = async (employee) => {
-    setSelectedEmployee(employee);
-    await fetchEmployeeHistory(employee.id);
-    setStep('verify');
-  };
-
-  // Busca por reconhecimento facial
-  const startFacialSearch = () => {
-    setSearchMode('facial');
-    setShowWebcam(true);
-  };
-
+  // RECONHECIMENTO FACIAL OBRIGATÓRIO
   const searchByFace = async () => {
     if (!webcamRef.current || !modelsLoaded) {
-      toast.error('Câmera ou modelos não carregados');
+      toast.error('Câmera ou modelos não carregados. Aguarde...');
       return;
     }
 
@@ -166,6 +147,9 @@ export default function EntregaEPI() {
       let bestMatch = { employee: null, score: 0 };
       
       for (const employee of allEmployees) {
+        // Verificar se colaborador tem foto
+        if (!employee.photo_path) continue;
+        
         try {
           const templatesRes = await axios.get(
             `${API}/employees/${employee.id}/facial-templates`,
@@ -188,7 +172,7 @@ export default function EntregaEPI() {
             }
           }
         } catch (e) {
-          // Colaborador sem template, ignorar
+          // Colaborador sem template
         }
       }
 
@@ -196,88 +180,17 @@ export default function EntregaEPI() {
       if (bestMatch.score >= threshold && bestMatch.employee) {
         toast.success(`Colaborador identificado: ${bestMatch.employee.full_name}`);
         setFacialMatch({ score: bestMatch.score, verified: true });
-        await selectEmployee(bestMatch.employee);
+        setCapturedPhoto(imageSrc);
+        setSelectedEmployee(bestMatch.employee);
+        await fetchEmployeeHistory(bestMatch.employee.id);
+        setShowWebcam(false);
+        setStep('delivery');
       } else {
-        toast.error('Colaborador não reconhecido. Use a busca manual.');
+        toast.error('Colaborador não reconhecido. Verifique se possui foto cadastrada ou procure o RH.');
       }
-      
-      setShowWebcam(false);
-      setSearchMode('manual');
     } catch (error) {
       console.error('Erro na busca facial:', error);
       toast.error('Erro ao processar reconhecimento facial');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const captureAndVerifyFace = async () => {
-    if (!webcamRef.current) return;
-
-    const imageSrc = webcamRef.current.getScreenshot();
-    if (!imageSrc || !modelsLoaded) {
-      toast.error('Não foi possível capturar a imagem');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const img = await faceapi.fetchImage(imageSrc);
-      const detection = await faceapi
-        .detectSingleFace(img, new faceapi.TinyFaceDetectorOptions())
-        .withFaceLandmarks()
-        .withFaceDescriptor();
-
-      if (!detection) {
-        toast.error('Nenhum rosto detectado. Tente novamente.');
-        setLoading(false);
-        return;
-      }
-
-      const templatesRes = await axios.get(
-        `${API}/employees/${selectedEmployee.id}/facial-templates`,
-        { headers: getAuthHeader() }
-      );
-
-      if (templatesRes.data.length === 0) {
-        toast.warning('Colaborador sem template facial cadastrado. Prosseguindo sem verificação.');
-        setFacialMatch({ score: 0, verified: false });
-        setShowWebcam(false);
-        setStep('delivery');
-        setLoading(false);
-        return;
-      }
-
-      let bestMatch = 0;
-      templatesRes.data.forEach(template => {
-        try {
-          const savedDescriptor = JSON.parse(template.descriptor);
-          const distance = faceapi.euclideanDistance(detection.descriptor, savedDescriptor);
-          const similarity = 1 - distance;
-          if (similarity > bestMatch) {
-            bestMatch = similarity;
-          }
-        } catch (e) {
-          console.error('Erro ao processar template:', e);
-        }
-      });
-
-      const threshold = 0.6;
-      const verified = bestMatch >= threshold;
-
-      setFacialMatch({ score: bestMatch, verified });
-      setShowWebcam(false);
-      
-      if (verified) {
-        toast.success('Rosto verificado com sucesso!');
-        setStep('delivery');
-      } else {
-        toast.warning('Verificação facial com baixa confiança. Prossiga com cautela.');
-        setStep('delivery');
-      }
-    } catch (error) {
-      console.error('Erro na verificação facial:', error);
-      toast.error('Erro na verificação facial');
     } finally {
       setLoading(false);
     }
@@ -324,9 +237,26 @@ export default function EntregaEPI() {
         quantity: 1,
         size: epi.size,
         batch: epi.batch,
-        qr_code: epi.qr_code
+        qr_code: epi.qr_code,
+        ca_number: epi.ca_number
       }]);
     }
+  };
+
+  const addKit = (kit) => {
+    // Adicionar todos os itens do kit
+    kit.items.forEach(kitItem => {
+      if (!selectedItems.find(item => item.epi_id === kitItem.epi_id)) {
+        setSelectedItems(prev => [...prev, {
+          epi_id: kitItem.epi_id,
+          name: kitItem.name,
+          quantity: kitItem.quantity,
+          ca_number: kitItem.ca_number,
+          from_kit: kit.name
+        }]);
+      }
+    });
+    toast.success(`Kit "${kit.name}" adicionado com ${kit.items.length} itens`);
   };
 
   const removeItem = (index) => {
@@ -339,8 +269,31 @@ export default function EntregaEPI() {
       return;
     }
 
+    if (!facialMatch?.verified) {
+      toast.error('Verificação facial obrigatória');
+      return;
+    }
+
     setLoading(true);
     try {
+      // Salvar foto de confirmação
+      let photoPath = null;
+      if (capturedPhoto) {
+        try {
+          const photoRes = await axios.post(
+            `${API}/deliveries/save-photo`,
+            new URLSearchParams({
+              employee_id: selectedEmployee.id,
+              photo_data: capturedPhoto
+            }),
+            { headers: { ...getAuthHeader(), 'Content-Type': 'application/x-www-form-urlencoded' } }
+          );
+          photoPath = photoRes.data.photo_path;
+        } catch (e) {
+          console.error('Erro ao salvar foto:', e);
+        }
+      }
+
       await axios.post(
         `${API}/deliveries`,
         {
@@ -348,6 +301,7 @@ export default function EntregaEPI() {
           delivery_type: deliveryType,
           is_return: deliveryType === 'return',
           facial_match_score: facialMatch?.score,
+          facial_photo_path: photoPath,
           items: selectedItems
         },
         { headers: getAuthHeader() }
@@ -369,15 +323,14 @@ export default function EntregaEPI() {
   };
 
   const resetForm = () => {
-    setStep('search');
+    setStep('facial');
     setSelectedEmployee(null);
     setFacialMatch(null);
     setSelectedItems([]);
-    setSearchTerm('');
-    setEmployees([]);
     setEmployeeHistory([]);
     setEmployeeCurrentItems([]);
-    setSearchMode('manual');
+    setCapturedPhoto(null);
+    setShowWebcam(true);
   };
 
   return (
@@ -385,266 +338,133 @@ export default function EntregaEPI() {
       <div className="space-y-6" data-testid="entrega-epi-page">
         <div>
           <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Entrega de EPI</h1>
-          <p className="text-slate-600 mt-1">Registre entregas e devoluções de equipamentos</p>
+          <p className="text-slate-600 mt-1">Registre entregas e devoluções via reconhecimento facial</p>
         </div>
 
-        {step === 'search' && (
+        {/* ETAPA 1: RECONHECIMENTO FACIAL OBRIGATÓRIO */}
+        {step === 'facial' && (
           <div className="bg-white border border-slate-200 rounded-lg shadow-sm p-6">
-            <h2 className="text-lg font-bold text-slate-900 mb-4">Buscar Colaborador</h2>
-            
-            {/* Modo de busca */}
-            <div className="flex gap-3 mb-6">
-              <button
-                onClick={() => { setSearchMode('manual'); setShowWebcam(false); }}
-                className={`flex-1 py-3 rounded-md font-medium flex items-center justify-center gap-2 transition-all ${
-                  searchMode === 'manual'
-                    ? 'bg-emerald-500 text-white'
-                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                }`}
-                data-testid="search-mode-manual"
-              >
-                <Keyboard className="w-5 h-5" />
-                Busca Manual (Nome/CPF)
-              </button>
-              <button
-                onClick={startFacialSearch}
-                className={`flex-1 py-3 rounded-md font-medium flex items-center justify-center gap-2 transition-all ${
-                  searchMode === 'facial'
-                    ? 'bg-blue-500 text-white'
-                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                }`}
-                data-testid="search-mode-facial"
-              >
-                <ScanFace className="w-5 h-5" />
-                Reconhecimento Facial
-              </button>
-            </div>
-
-            {/* Busca Manual */}
-            {searchMode === 'manual' && !showWebcam && (
-              <>
-                <div className="flex gap-3 mb-6">
-                  <div className="flex-1">
-                    <input
-                      type="text"
-                      data-testid="search-employee"
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      onKeyPress={(e) => e.key === 'Enter' && searchEmployees()}
-                      placeholder="Digite nome, CPF ou matrícula..."
-                      className="flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                    />
-                  </div>
-                  <button
-                    onClick={searchEmployees}
-                    data-testid="search-button"
-                    className="bg-emerald-500 hover:bg-emerald-600 text-white font-medium rounded-md px-6 py-2 flex items-center gap-2"
-                  >
-                    <Search className="w-4 h-4" />
-                    Buscar
-                  </button>
-                </div>
-
-                {loading && (
-                  <div className="flex justify-center py-8">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-500"></div>
-                  </div>
-                )}
-
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {employees.map((employee) => (
-                    <div
-                      key={employee.id}
-                      onClick={() => selectEmployee(employee)}
-                      className="border border-slate-200 rounded-lg p-4 hover:border-emerald-300 hover:shadow-md cursor-pointer transition-all"
-                      data-testid={`employee-card-${employee.id}`}
-                    >
-                      <div className="flex items-center gap-3">
-                        {employee.photo_path ? (
-                          <img 
-                            src={`${BACKEND_URL}${employee.photo_path}`}
-                            alt={employee.full_name}
-                            className="w-12 h-12 rounded-full object-cover"
-                          />
-                        ) : (
-                          <div className="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center">
-                            <User className="w-6 h-6 text-emerald-600" />
-                          </div>
-                        )}
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium text-slate-900 truncate">{employee.full_name}</p>
-                          <p className="text-sm text-slate-500 font-mono">{employee.cpf}</p>
-                          <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium mt-1 ${
-                            employee.status === 'active' 
-                              ? 'bg-emerald-100 text-emerald-700' 
-                              : 'bg-slate-100 text-slate-600'
-                          }`}>
-                            {employee.status === 'active' ? 'Ativo' : 'Inativo'}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
-
-            {/* Busca Facial */}
-            {showWebcam && searchMode === 'facial' && (
-              <div className="max-w-lg mx-auto">
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-                  <p className="text-sm text-blue-800">
-                    <ScanFace className="w-4 h-4 inline mr-2" />
-                    Posicione o rosto do colaborador na câmera e clique em "Identificar"
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+              <div className="flex items-start gap-3">
+                <ScanFace className="w-6 h-6 text-blue-600 flex-shrink-0 mt-0.5" />
+                <div>
+                  <h3 className="font-medium text-blue-900">Identificação Obrigatória</h3>
+                  <p className="text-sm text-blue-700 mt-1">
+                    Posicione o rosto do colaborador na câmera para identificação biométrica. 
+                    A entrega só pode ser realizada após confirmação facial.
                   </p>
                 </div>
-                <Webcam
-                  ref={webcamRef}
-                  audio={false}
-                  screenshotFormat="image/jpeg"
-                  className="w-full rounded-lg mb-4"
-                />
-                <div className="flex gap-3">
-                  <button
-                    onClick={searchByFace}
-                    disabled={loading}
-                    className="flex-1 bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-md px-4 py-3 flex items-center justify-center gap-2 disabled:opacity-50"
-                    data-testid="facial-search-button"
-                  >
-                    <ScanFace className="w-5 h-5" />
-                    {loading ? 'Identificando...' : 'Identificar Colaborador'}
-                  </button>
-                  <button
-                    onClick={() => { setShowWebcam(false); setSearchMode('manual'); }}
-                    className="bg-slate-200 hover:bg-slate-300 text-slate-700 font-medium rounded-md px-4 py-3"
-                  >
-                    Cancelar
-                  </button>
-                </div>
+              </div>
+            </div>
+
+            {!modelsLoaded ? (
+              <div className="flex flex-col items-center justify-center py-12">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mb-4"></div>
+                <p className="text-slate-600">Carregando modelos de reconhecimento facial...</p>
+              </div>
+            ) : (
+              <div className="max-w-xl mx-auto">
+                {showWebcam && (
+                  <>
+                    <Webcam
+                      ref={webcamRef}
+                      audio={false}
+                      screenshotFormat="image/jpeg"
+                      className="w-full rounded-lg mb-4 border-4 border-blue-200"
+                      videoConstraints={{
+                        facingMode: "user"
+                      }}
+                    />
+                    <button
+                      onClick={searchByFace}
+                      disabled={loading}
+                      className="w-full bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-md px-4 py-4 flex items-center justify-center gap-2 disabled:opacity-50 text-lg"
+                      data-testid="facial-identify-button"
+                    >
+                      <ScanFace className="w-6 h-6" />
+                      {loading ? 'Identificando...' : 'Identificar Colaborador'}
+                    </button>
+                  </>
+                )}
               </div>
             )}
+
+            <div className="mt-6 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                <div className="text-sm text-amber-800">
+                  <p className="font-medium">Colaborador não reconhecido?</p>
+                  <p>Se o colaborador não for identificado, verifique se ele possui foto cadastrada no sistema. Caso não possua, procure o setor de RH para realizar o cadastro.</p>
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
-        {step === 'verify' && selectedEmployee && (
-          <div className="bg-white border border-slate-200 rounded-lg shadow-sm p-6">
-            <h2 className="text-lg font-bold text-slate-900 mb-4">Ficha do Colaborador</h2>
-            
-            {/* Informações do colaborador */}
-            <div className="flex items-center gap-4 mb-6 p-4 bg-slate-50 rounded-lg">
-              {selectedEmployee.photo_path ? (
-                <img 
-                  src={`${BACKEND_URL}${selectedEmployee.photo_path}`}
-                  alt={selectedEmployee.full_name}
-                  className="w-20 h-20 rounded-full object-cover border-4 border-white shadow-md"
-                />
-              ) : (
-                <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center border-4 border-white shadow-md">
-                  <User className="w-10 h-10 text-emerald-600" />
-                </div>
-              )}
-              <div className="flex-1">
-                <p className="font-bold text-xl text-slate-900">{selectedEmployee.full_name}</p>
-                <p className="text-sm text-slate-600">CPF: {selectedEmployee.cpf}</p>
-                <p className="text-sm text-slate-600">Matrícula: {selectedEmployee.registration_number || 'N/A'}</p>
-                <p className="text-sm text-slate-600">Setor: {selectedEmployee.department || 'N/A'}</p>
-              </div>
-              <button
-                onClick={() => setShowHistoryDialog(true)}
-                className="bg-slate-200 hover:bg-slate-300 text-slate-700 font-medium rounded-md px-4 py-2 flex items-center gap-2"
-              >
-                <History className="w-4 h-4" />
-                Ver Histórico
-              </button>
-            </div>
-
-            {/* EPIs em uso */}
-            {employeeCurrentItems.length > 0 && (
-              <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-lg">
-                <h3 className="font-medium text-amber-800 mb-3 flex items-center gap-2">
-                  <Package className="w-5 h-5" />
-                  EPIs em Uso Atualmente
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                  {employeeCurrentItems.map((item, idx) => (
-                    <div key={idx} className="flex items-center justify-between p-2 bg-white rounded border border-amber-200">
-                      <span className="text-sm font-medium text-slate-900">{item.name}</span>
-                      <span className="text-sm text-amber-700">Qtd: {item.quantity}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Verificação facial */}
-            <div className="space-y-4">
-              {!showWebcam ? (
-                <>
-                  <button
-                    onClick={() => setShowWebcam(true)}
-                    data-testid="start-facial-recognition"
-                    className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-medium rounded-md px-4 py-3 flex items-center justify-center gap-2"
-                  >
-                    <Camera className="w-5 h-5" />
-                    Verificar Identidade (Foto de Confirmação)
-                  </button>
-                  
-                  <button
-                    onClick={() => setStep('delivery')}
-                    className="w-full bg-slate-200 hover:bg-slate-300 text-slate-700 font-medium rounded-md px-4 py-3"
-                  >
-                    Pular Verificação
-                  </button>
-                </>
-              ) : (
-                <div>
-                  <Webcam
-                    ref={webcamRef}
-                    audio={false}
-                    screenshotFormat="image/jpeg"
-                    className="w-full rounded-lg mb-4"
+        {/* ETAPA 2: ENTREGA/DEVOLUÇÃO */}
+        {step === 'delivery' && selectedEmployee && (
+          <div className="space-y-6">
+            {/* Info do Colaborador */}
+            <div className="bg-white border border-slate-200 rounded-lg shadow-sm p-6">
+              <div className="flex items-center gap-4 mb-4">
+                {capturedPhoto ? (
+                  <img 
+                    src={capturedPhoto}
+                    alt={selectedEmployee.full_name}
+                    className="w-20 h-20 rounded-full object-cover border-4 border-emerald-200 shadow-md"
                   />
-                  <div className="flex gap-3">
-                    <button
-                      onClick={captureAndVerifyFace}
-                      disabled={loading}
-                      className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white font-medium rounded-md px-4 py-2 disabled:opacity-50"
-                    >
-                      {loading ? 'Verificando...' : 'Capturar e Verificar'}
-                    </button>
-                    <button
-                      onClick={() => setShowWebcam(false)}
-                      className="bg-slate-200 hover:bg-slate-300 text-slate-700 font-medium rounded-md px-4 py-2"
-                    >
-                      Cancelar
-                    </button>
+                ) : selectedEmployee.photo_path ? (
+                  <img 
+                    src={`${BACKEND_URL}${selectedEmployee.photo_path}`}
+                    alt={selectedEmployee.full_name}
+                    className="w-20 h-20 rounded-full object-cover border-4 border-white shadow-md"
+                  />
+                ) : (
+                  <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center border-4 border-white shadow-md">
+                    <User className="w-10 h-10 text-emerald-600" />
+                  </div>
+                )}
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <p className="font-bold text-xl text-slate-900">{selectedEmployee.full_name}</p>
+                    <span className="px-2 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">
+                      ✓ Verificado
+                    </span>
+                  </div>
+                  <p className="text-sm text-slate-600">Matrícula: {selectedEmployee.registration_number || 'N/A'}</p>
+                  <p className="text-sm text-slate-600">Setor: {selectedEmployee.department || 'N/A'}</p>
+                </div>
+                <button
+                  onClick={() => setShowHistoryDialog(true)}
+                  className="bg-slate-200 hover:bg-slate-300 text-slate-700 font-medium rounded-md px-4 py-2 flex items-center gap-2"
+                >
+                  <History className="w-4 h-4" />
+                  Histórico
+                </button>
+              </div>
+
+              {/* EPIs em uso */}
+              {employeeCurrentItems.length > 0 && (
+                <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                  <h3 className="font-medium text-amber-800 mb-3 flex items-center gap-2">
+                    <Package className="w-5 h-5" />
+                    EPIs em Uso Atualmente
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    {employeeCurrentItems.map((item, idx) => (
+                      <div key={idx} className="flex items-center justify-between p-2 bg-white rounded border border-amber-200">
+                        <span className="text-sm font-medium text-slate-900">{item.name}</span>
+                        <span className="text-sm text-amber-700">Qtd: {item.quantity}</span>
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}
             </div>
-          </div>
-        )}
 
-        {step === 'delivery' && selectedEmployee && (
-          <div className="space-y-6">
+            {/* Seleção de Itens */}
             <div className="bg-white border border-slate-200 rounded-lg shadow-sm p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-bold text-slate-900">Registrar Movimentação</h2>
-                <div className="flex items-center gap-2">
-                  {facialMatch && (
-                    <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                      facialMatch.verified
-                        ? 'bg-emerald-100 text-emerald-700'
-                        : 'bg-orange-100 text-orange-700'
-                    }`}>
-                      {facialMatch.verified ? '✓ Rosto Verificado' : '⚠ Baixa Confiança'}
-                    </span>
-                  )}
-                  <span className="text-sm text-slate-600">
-                    {selectedEmployee.full_name}
-                  </span>
-                </div>
-              </div>
+              <h2 className="text-lg font-bold text-slate-900 mb-4">Registrar Movimentação</h2>
 
               <div className="flex gap-4 mb-6">
                 <button
@@ -671,6 +491,31 @@ export default function EntregaEPI() {
                 </button>
               </div>
 
+              {/* Seleção de Kit */}
+              {kits.length > 0 && (
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    Entregar Kit Completo:
+                  </label>
+                  <select
+                    onChange={(e) => {
+                      const kit = kits.find(k => k.id === e.target.value);
+                      if (kit) addKit(kit);
+                      e.target.value = '';
+                    }}
+                    className="flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
+                    data-testid="select-kit"
+                  >
+                    <option value="">Selecione um Kit...</option>
+                    {kits.map((kit) => (
+                      <option key={kit.id} value={kit.id}>
+                        {kit.name} {kit.sector ? `(${kit.sector})` : ''} - {kit.items?.length || 0} itens
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               <button
                 onClick={startQRScanner}
                 className="w-full bg-slate-700 hover:bg-slate-800 text-white font-medium rounded-md px-4 py-3 flex items-center justify-center gap-2 mb-4"
@@ -686,7 +531,7 @@ export default function EntregaEPI() {
 
               <div className="mb-4">
                 <label className="block text-sm font-medium text-slate-700 mb-2">
-                  Ou selecione manualmente:
+                  Ou selecione item individual:
                 </label>
                 <select
                   onChange={(e) => {
@@ -700,7 +545,7 @@ export default function EntregaEPI() {
                   <option value="">Selecione um EPI...</option>
                   {epis.map((epi) => (
                     <option key={epi.id} value={epi.id}>
-                      {epi.name} - Estoque: {epi.current_stock}
+                      {epi.name} - CA: {epi.ca_number} - Estoque: {epi.current_stock}
                     </option>
                   ))}
                 </select>
@@ -708,18 +553,21 @@ export default function EntregaEPI() {
 
               {selectedItems.length > 0 && (
                 <div className="space-y-2 mb-6">
-                  <p className="text-sm font-medium text-slate-700">Itens selecionados:</p>
+                  <p className="text-sm font-medium text-slate-700">Itens selecionados ({selectedItems.length}):</p>
                   {selectedItems.map((item, index) => (
                     <div key={index} className="flex items-center justify-between p-3 bg-slate-50 rounded-md">
                       <div>
                         <p className="font-medium text-slate-900">{item.name}</p>
-                        <p className="text-sm text-slate-600">Quantidade: {item.quantity}</p>
+                        <p className="text-sm text-slate-600">
+                          CA: {item.ca_number || 'N/A'} | Qtd: {item.quantity}
+                          {item.from_kit && <span className="text-blue-600 ml-2">(Kit: {item.from_kit})</span>}
+                        </p>
                       </div>
                       <button
                         onClick={() => removeItem(index)}
-                        className="text-red-500 hover:text-red-700 text-sm font-medium"
+                        className="text-red-500 hover:text-red-700 p-1"
                       >
-                        Remover
+                        <X className="w-5 h-5" />
                       </button>
                     </div>
                   ))}
@@ -751,7 +599,7 @@ export default function EntregaEPI() {
         <Dialog open={showHistoryDialog} onOpenChange={setShowHistoryDialog}>
           <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>Histórico de Movimentações - {selectedEmployee?.full_name}</DialogTitle>
+              <DialogTitle>Histórico - {selectedEmployee?.full_name}</DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
               {employeeHistory.length === 0 ? (
@@ -770,7 +618,7 @@ export default function EntregaEPI() {
                     <div className="space-y-1">
                       {delivery.items?.map((item, i) => (
                         <p key={i} className="text-sm text-slate-700">
-                          • {item.epi_name || item.tool_name || item.name} (Qtd: {item.quantity})
+                          • {item.epi_name || item.name} (Qtd: {item.quantity})
                         </p>
                       ))}
                     </div>
