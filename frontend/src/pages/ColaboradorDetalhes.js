@@ -498,22 +498,31 @@ export default function ColaboradorDetalhes() {
                       ref={webcamRef}
                       audio={false}
                       screenshotFormat="image/jpeg"
+                      screenshotQuality={0.92}
                       className="w-full rounded-lg border-4 border-blue-200"
                       videoConstraints={{
                         facingMode: "user",
-                        width: 640,
-                        height: 480
+                        width: { ideal: 640 },
+                        height: { ideal: 480 },
+                        frameRate: { ideal: 30 }
                       }}
+                      mirrored={true}
                     />
                     <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                      <div className="w-48 h-64 border-4 border-dashed border-blue-400 rounded-3xl opacity-50"></div>
+                      <div className="w-48 h-64 border-4 border-dashed border-blue-400 rounded-3xl opacity-60"></div>
                     </div>
                   </div>
                   
                   <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
                     <p className="text-sm text-blue-800">
-                      <strong>Dica:</strong> Posicione o rosto do colaborador dentro da área tracejada, com boa iluminação e sem obstáculos.
+                      <strong>Dicas para melhor captura:</strong>
                     </p>
+                    <ul className="text-sm text-blue-700 mt-2 space-y-1">
+                      <li>• Posicione o rosto dentro da área tracejada</li>
+                      <li>• Garanta boa iluminação (evite contraluz)</li>
+                      <li>• Olhe diretamente para a câmera</li>
+                      <li>• Remova óculos escuros ou chapéus</li>
+                    </ul>
                   </div>
                   
                   <div className="flex gap-3">
