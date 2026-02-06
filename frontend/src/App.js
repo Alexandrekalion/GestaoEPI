@@ -16,6 +16,7 @@ import Documentacao from '@/pages/Documentacao';
 import Usuarios from '@/pages/Usuarios';
 import Configuracoes from '@/pages/Configuracoes';
 import Fornecedores from '@/pages/Fornecedores';
+import ColaboradorDetalhes from '@/pages/ColaboradorDetalhes';
 import '@/App.css';
 
 const PrivateRoute = ({ children }) => {
@@ -40,6 +41,7 @@ function AppRoutes() {
       <Route path="/dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
       <Route path="/entrega-epi" element={<PrivateRoute><EntregaEPI /></PrivateRoute>} />
       <Route path="/colaboradores" element={<PrivateRoute><Colaboradores /></PrivateRoute>} />
+      <Route path="/colaboradores/:id" element={<PrivateRoute><ColaboradorDetalhes /></PrivateRoute>} />
       <Route path="/empresas" element={<PrivateRoute><Empresas /></PrivateRoute>} />
       <Route path="/epis" element={<PrivateRoute><EPIs /></PrivateRoute>} />
       <Route path="/ferramentas" element={<PrivateRoute><Ferramentas /></PrivateRoute>} />
