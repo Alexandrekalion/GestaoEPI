@@ -221,6 +221,44 @@ async def delete_user(user_id: str, current_user: dict = Depends(require_role('a
         raise HTTPException(status_code=404, detail='Usuário não encontrado')
     return {'message': 'Usuário excluído'}
 
+class ResetPasswordRequest(BaseModel):
+    new_password: str
+
+@api_router.post('/users/{user_id}/reset-password')
+async def reset_user_password(user_id: str, request: ResetPasswordRequest, current_user: dict = Depends(require_role('admin'))):
+    """Permite ao administrador redefinir a senha de qualquer usuário"""
+    db = await get_db()
+    
+    user = await db.users.find_one({"_id": ObjectId(user_id)})
+    if not user:
+        raise HTTPException(status_code=404, detail='Usuário não encontrado')
+    
+    # Validar complexidade da senha
+    password = request.new_password
+    import re
+    if len(password) < 8:
+        raise HTTPException(status_code=400, detail='A senha deve ter no mínimo 8 caracteres')
+    if not re.search(r'[A-Z]', password):
+        raise HTTPException(status_code=400, detail='A senha deve conter pelo menos uma letra maiúscula')
+    if not re.search(r'[a-z]', password):
+        raise HTTPException(status_code=400, detail='A senha deve conter pelo menos uma letra minúscula')
+    if not re.search(r'\d', password):
+        raise HTTPException(status_code=400, detail='A senha deve conter pelo menos um número')
+    if not re.search(r'[!@#$%^&*(),.?":{}|<>]', password):
+        raise HTTPException(status_code=400, detail='A senha deve conter pelo menos um caractere especial')
+    
+    await db.users.update_one(
+        {"_id": ObjectId(user_id)},
+        {"$set": {
+            "hashed_password": get_password_hash(password),
+            "must_change_password": True,
+            "password_changed_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(timezone.utc)
+        }}
+    )
+    
+    return {'message': 'Senha redefinida com sucesso'}
+
 # ===================== COMPANIES =====================
 
 @api_router.get('/companies', response_model=List[CompanyResponse])
