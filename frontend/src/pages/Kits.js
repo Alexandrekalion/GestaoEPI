@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { Plus, Box, Search, Edit2, Trash2, Eye, Package, Wrench, X } from 'lucide-react';
+import { Plus, Box, Edit2, Printer, Trash2, Package, X, Eye } from 'lucide-react';
 import axios from 'axios';
 import { getAuthHeader } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -13,20 +13,19 @@ const API = `${BACKEND_URL}/api`;
 export default function Kits() {
   const [kits, setKits] = useState([]);
   const [epis, setEpis] = useState([]);
-  const [ferramentas, setFerramentas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showDialog, setShowDialog] = useState(false);
   const [showViewDialog, setShowViewDialog] = useState(false);
   const [selectedKit, setSelectedKit] = useState(null);
+  const [editingKit, setEditingKit] = useState(null);
   const [formData, setFormData] = useState({
     name: '',
     description: '',
+    sector: '',
     items: []
   });
   const [selectedEPI, setSelectedEPI] = useState('');
-  const [selectedTool, setSelectedTool] = useState('');
   const [epiQuantity, setEpiQuantity] = useState(1);
-  const [toolQuantity, setToolQuantity] = useState(1);
 
   useEffect(() => {
     fetchData();
@@ -34,14 +33,12 @@ export default function Kits() {
 
   const fetchData = async () => {
     try {
-      const [kitsRes, episRes, toolsRes] = await Promise.all([
+      const [kitsRes, episRes] = await Promise.all([
         axios.get(`${API}/kits`, { headers: getAuthHeader() }),
-        axios.get(`${API}/epis`, { headers: getAuthHeader() }),
-        axios.get(`${API}/tools`, { headers: getAuthHeader() })
+        axios.get(`${API}/epis`, { headers: getAuthHeader() })
       ]);
       setKits(kitsRes.data);
       setEpis(episRes.data);
-      setFerramentas(toolsRes.data);
     } catch (error) {
       console.error('Erro:', error);
       toast.error('Erro ao carregar dados');
@@ -66,41 +63,14 @@ export default function Kits() {
         items: [...formData.items, { 
           epi_id: epi.id, 
           name: epi.name, 
-          type: 'epi', 
           quantity: epiQuantity,
-          ca_number: epi.ca_number
+          ca_number: epi.ca_number,
+          type_category: epi.type_category
         }]
       });
       setSelectedEPI('');
       setEpiQuantity(1);
       toast.success(`${epi.name} adicionado ao kit`);
-    }
-  };
-
-  const addToolToKit = () => {
-    if (!selectedTool) {
-      toast.error('Selecione uma ferramenta');
-      return;
-    }
-    const tool = ferramentas.find(t => t.id === selectedTool);
-    if (tool) {
-      if (formData.items.find(i => i.tool_id === tool.id)) {
-        toast.error('Esta ferramenta já foi adicionada ao kit');
-        return;
-      }
-      setFormData({
-        ...formData,
-        items: [...formData.items, { 
-          tool_id: tool.id, 
-          name: tool.name, 
-          type: 'tool', 
-          quantity: toolQuantity,
-          serial_number: tool.serial_number
-        }]
-      });
-      setSelectedTool('');
-      setToolQuantity(1);
-      toast.success(`${tool.name} adicionado ao kit`);
     }
   };
 
@@ -124,19 +94,103 @@ export default function Kits() {
     e.preventDefault();
     
     if (formData.items.length === 0) {
-      toast.error('Adicione pelo menos um item ao kit');
+      toast.error('Adicione pelo menos um EPI ao kit');
       return;
     }
     
     try {
-      await axios.post(`${API}/kits`, formData, { headers: getAuthHeader() });
-      toast.success('Kit criado com sucesso!');
+      const payload = {
+        name: formData.name,
+        description: formData.description,
+        sector: formData.sector,
+        items: formData.items.map(item => ({
+          epi_id: item.epi_id,
+          quantity: item.quantity
+        }))
+      };
+
+      if (editingKit) {
+        await axios.patch(`${API}/kits/${editingKit.id}`, payload, { headers: getAuthHeader() });
+        toast.success('Kit atualizado com sucesso!');
+      } else {
+        await axios.post(`${API}/kits`, payload, { headers: getAuthHeader() });
+        toast.success('Kit criado com sucesso!');
+      }
       setShowDialog(false);
-      setFormData({ name: '', description: '', items: [] });
+      resetForm();
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Erro ao criar kit');
+      toast.error(error.response?.data?.detail || 'Erro ao salvar kit');
     }
+  };
+
+  const handleEdit = (kit) => {
+    setEditingKit(kit);
+    setFormData({
+      name: kit.name || '',
+      description: kit.description || '',
+      sector: kit.sector || '',
+      items: kit.items || []
+    });
+    setShowDialog(true);
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm('Tem certeza que deseja excluir este kit?')) return;
+    try {
+      await axios.delete(`${API}/kits/${id}`, { headers: getAuthHeader() });
+      toast.success('Kit excluído');
+      fetchData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Erro ao excluir');
+    }
+  };
+
+  const handlePrint = (kit) => {
+    const itemsList = kit.items?.map(item => `
+      <tr>
+        <td style="padding: 8px; border-bottom: 1px solid #ddd;">${item.name}</td>
+        <td style="padding: 8px; border-bottom: 1px solid #ddd;">${item.ca_number || '-'}</td>
+        <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: center;">${item.quantity}</td>
+      </tr>
+    `).join('') || '<tr><td colspan="3">Nenhum item</td></tr>';
+
+    const printContent = `
+      <html>
+        <head>
+          <title>Kit - ${kit.name}</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 20px; }
+            h1 { color: #333; border-bottom: 2px solid #10b981; padding-bottom: 10px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+            th { background: #f1f5f9; padding: 10px; text-align: left; border-bottom: 2px solid #ddd; }
+            .info { margin: 10px 0; color: #666; }
+          </style>
+        </head>
+        <body>
+          <h1>Kit: ${kit.name}</h1>
+          <p class="info"><strong>Setor:</strong> ${kit.sector || 'Não especificado'}</p>
+          <p class="info"><strong>Descrição:</strong> ${kit.description || '-'}</p>
+          <table>
+            <thead>
+              <tr>
+                <th>EPI</th>
+                <th>CA</th>
+                <th>Quantidade</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${itemsList}
+            </tbody>
+          </table>
+          <p style="margin-top: 30px; font-size: 12px; color: #999;">Impresso em: ${new Date().toLocaleString('pt-BR')}</p>
+        </body>
+      </html>
+    `;
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(printContent);
+    printWindow.document.close();
+    printWindow.print();
   };
 
   const openKitDetails = (kit) => {
@@ -145,11 +199,10 @@ export default function Kits() {
   };
 
   const resetForm = () => {
-    setFormData({ name: '', description: '', items: [] });
+    setFormData({ name: '', description: '', sector: '', items: [] });
     setSelectedEPI('');
-    setSelectedTool('');
     setEpiQuantity(1);
-    setToolQuantity(1);
+    setEditingKit(null);
   };
 
   if (loading) {
@@ -168,7 +221,7 @@ export default function Kits() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Kits</h1>
-            <p className="text-slate-600 mt-1">Gerencie kits de EPIs e ferramentas</p>
+            <p className="text-slate-600 mt-1">Gerencie kits de EPIs por setor</p>
           </div>
           <Dialog open={showDialog} onOpenChange={(open) => { setShowDialog(open); if (!open) resetForm(); }}>
             <DialogTrigger asChild>
@@ -179,12 +232,12 @@ export default function Kits() {
             </DialogTrigger>
             <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
-                <DialogTitle>Criar Novo Kit</DialogTitle>
+                <DialogTitle>{editingKit ? 'Editar Kit' : 'Criar Novo Kit'}</DialogTitle>
               </DialogHeader>
               <form onSubmit={handleSubmit} className="space-y-6">
                 {/* Informações básicas */}
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="col-span-2">
+                  <div className="col-span-2 md:col-span-1">
                     <label className="block text-sm font-medium mb-1">Nome do Kit *</label>
                     <input
                       type="text"
@@ -192,8 +245,18 @@ export default function Kits() {
                       value={formData.name}
                       onChange={(e) => setFormData({...formData, name: e.target.value})}
                       className="flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
-                      placeholder="Ex: Kit Eletricista, Kit Altura, Kit Solda"
+                      placeholder="Ex: Kit Eletricista, Kit Altura"
                       data-testid="kit-name-input"
+                    />
+                  </div>
+                  <div className="col-span-2 md:col-span-1">
+                    <label className="block text-sm font-medium mb-1">Setor</label>
+                    <input
+                      type="text"
+                      value={formData.sector}
+                      onChange={(e) => setFormData({...formData, sector: e.target.value})}
+                      className="flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
+                      placeholder="Ex: Marcenaria, Serralheria, Montagem"
                     />
                   </div>
                   <div className="col-span-2">
@@ -211,7 +274,7 @@ export default function Kits() {
                 <div className="border-t pt-4">
                   <h3 className="font-medium text-slate-900 mb-3 flex items-center gap-2">
                     <Package className="w-5 h-5 text-emerald-600" />
-                    Adicionar EPIs
+                    Adicionar EPIs ao Kit
                   </h3>
                   <div className="flex gap-2 mb-4">
                     <select
@@ -247,73 +310,23 @@ export default function Kits() {
                   </div>
                 </div>
 
-                {/* Adicionar Ferramentas */}
-                <div className="border-t pt-4">
-                  <h3 className="font-medium text-slate-900 mb-3 flex items-center gap-2">
-                    <Wrench className="w-5 h-5 text-orange-600" />
-                    Adicionar Ferramentas
-                  </h3>
-                  <div className="flex gap-2 mb-4">
-                    <select
-                      value={selectedTool}
-                      onChange={(e) => setSelectedTool(e.target.value)}
-                      className="flex h-10 flex-1 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
-                      data-testid="select-tool-kit"
-                    >
-                      <option value="">Selecione uma ferramenta...</option>
-                      {ferramentas.map(tool => (
-                        <option key={tool.id} value={tool.id}>
-                          {tool.name} {tool.serial_number ? `(S/N: ${tool.serial_number})` : ''}
-                        </option>
-                      ))}
-                    </select>
-                    <input
-                      type="number"
-                      min="1"
-                      value={toolQuantity}
-                      onChange={(e) => setToolQuantity(parseInt(e.target.value) || 1)}
-                      className="w-20 h-10 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-center"
-                      placeholder="Qtd"
-                    />
-                    <Button 
-                      type="button" 
-                      onClick={addToolToKit} 
-                      className="bg-orange-500 hover:bg-orange-600"
-                      data-testid="add-tool-to-kit"
-                    >
-                      <Plus className="w-4 h-4 mr-1" />
-                      Adicionar
-                    </Button>
-                  </div>
-                </div>
-
                 {/* Lista de itens do kit */}
                 {formData.items.length > 0 && (
                   <div className="border-t pt-4">
                     <h3 className="font-medium text-slate-900 mb-3">
-                      Itens do Kit ({formData.items.length})
+                      EPIs do Kit ({formData.items.length})
                     </h3>
                     <div className="space-y-2 max-h-48 overflow-y-auto">
                       {formData.items.map((item, idx) => (
                         <div 
                           key={idx} 
-                          className={`flex items-center justify-between p-3 rounded-md border ${
-                            item.type === 'epi' 
-                              ? 'bg-emerald-50 border-emerald-200' 
-                              : 'bg-orange-50 border-orange-200'
-                          }`}
+                          className="flex items-center justify-between p-3 rounded-md border bg-emerald-50 border-emerald-200"
                         >
                           <div className="flex items-center gap-3">
-                            {item.type === 'epi' ? (
-                              <Package className="w-5 h-5 text-emerald-600" />
-                            ) : (
-                              <Wrench className="w-5 h-5 text-orange-600" />
-                            )}
+                            <Package className="w-5 h-5 text-emerald-600" />
                             <div>
                               <p className="font-medium text-slate-900">{item.name}</p>
-                              <p className="text-xs text-slate-500">
-                                {item.type === 'epi' ? `CA: ${item.ca_number || 'N/A'}` : `S/N: ${item.serial_number || 'N/A'}`}
-                              </p>
+                              <p className="text-xs text-slate-500">CA: {item.ca_number || 'N/A'}</p>
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
@@ -350,7 +363,7 @@ export default function Kits() {
 
                 <div className="border-t pt-4 flex gap-3">
                   <Button type="submit" className="flex-1 bg-emerald-500 hover:bg-emerald-600" data-testid="submit-kit">
-                    Criar Kit
+                    {editingKit ? 'Salvar Alterações' : 'Criar Kit'}
                   </Button>
                   <Button type="button" variant="outline" onClick={() => setShowDialog(false)}>
                     Cancelar
@@ -369,46 +382,71 @@ export default function Kits() {
             <p className="text-slate-600 mb-4">Crie seu primeiro kit clicando no botão acima</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {kits.map((kit) => (
-              <div 
-                key={kit.id} 
-                className="bg-white border border-slate-200 rounded-lg shadow-sm p-6 hover:shadow-md transition-shadow"
-              >
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex items-start gap-3">
-                    <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                      <Box className="w-6 h-6 text-purple-600" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-bold text-slate-900 truncate">{kit.name}</h3>
-                      {kit.description && (
-                        <p className="text-sm text-slate-600 mt-1 line-clamp-2">{kit.description}</p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-                
-                {/* Resumo dos itens */}
-                <div className="border-t border-slate-100 pt-3 mt-3">
-                  <p className="text-xs text-slate-500 mb-2">
-                    {kit.items?.length || 0} item(ns) no kit
-                  </p>
-                  <div className="flex gap-2">
-                    <Button 
-                      size="sm" 
-                      variant="outline" 
-                      onClick={() => openKitDetails(kit)}
-                      className="flex-1"
-                      data-testid={`view-kit-${kit.id}`}
-                    >
-                      <Eye className="w-4 h-4 mr-1" />
-                      Visualizar
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            ))}
+          <div className="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
+            <table className="w-full">
+              <thead className="bg-slate-50 border-b border-slate-200">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Nome</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Setor</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Descrição</th>
+                  <th className="px-6 py-3 text-center text-xs font-medium text-slate-500 uppercase">Itens</th>
+                  <th className="px-6 py-3 text-center text-xs font-medium text-slate-500 uppercase">Ações</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200">
+                {kits.map((kit) => (
+                  <tr key={kit.id} className="hover:bg-slate-50">
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                          <Box className="w-5 h-5 text-purple-600" />
+                        </div>
+                        <p className="font-medium text-slate-900">{kit.name}</p>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 text-sm text-slate-600">{kit.sector || '-'}</td>
+                    <td className="px-6 py-4 text-sm text-slate-600 max-w-xs truncate">{kit.description || '-'}</td>
+                    <td className="px-6 py-4 text-center">
+                      <span className="px-2 py-1 bg-emerald-100 text-emerald-700 rounded-full text-sm font-medium">
+                        {kit.items?.length || 0} EPIs
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center justify-center gap-2">
+                        <button
+                          onClick={() => openKitDetails(kit)}
+                          className="p-2 text-slate-600 hover:bg-slate-100 rounded-md transition-colors"
+                          title="Visualizar"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleEdit(kit)}
+                          className="p-2 text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+                          title="Editar"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handlePrint(kit)}
+                          className="p-2 text-slate-600 hover:bg-slate-100 rounded-md transition-colors"
+                          title="Imprimir"
+                        >
+                          <Printer className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(kit.id)}
+                          className="p-2 text-red-600 hover:bg-red-50 rounded-md transition-colors"
+                          title="Excluir"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
 
@@ -423,37 +461,41 @@ export default function Kits() {
             </DialogHeader>
             {selectedKit && (
               <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <p className="text-slate-500">Setor</p>
+                    <p className="font-medium">{selectedKit.sector || '-'}</p>
+                  </div>
+                  <div>
+                    <p className="text-slate-500">Total de Itens</p>
+                    <p className="font-medium">{selectedKit.items?.length || 0} EPIs</p>
+                  </div>
+                </div>
+                
                 {selectedKit.description && (
-                  <p className="text-slate-600">{selectedKit.description}</p>
+                  <div>
+                    <p className="text-slate-500 text-sm">Descrição</p>
+                    <p className="text-sm">{selectedKit.description}</p>
+                  </div>
                 )}
                 
                 <div className="border-t pt-4">
-                  <h3 className="font-medium text-slate-900 mb-3">Itens do Kit</h3>
+                  <h3 className="font-medium text-slate-900 mb-3">EPIs do Kit</h3>
                   
                   {(!selectedKit.items || selectedKit.items.length === 0) ? (
-                    <p className="text-slate-500 text-center py-4">Nenhum item cadastrado neste kit</p>
+                    <p className="text-slate-500 text-center py-4">Nenhum EPI cadastrado</p>
                   ) : (
                     <div className="space-y-2">
                       {selectedKit.items.map((item, idx) => (
                         <div 
                           key={idx} 
-                          className={`flex items-center justify-between p-3 rounded-md border ${
-                            item.epi_id 
-                              ? 'bg-emerald-50 border-emerald-200' 
-                              : 'bg-orange-50 border-orange-200'
-                          }`}
+                          className="flex items-center justify-between p-3 rounded-md border bg-emerald-50 border-emerald-200"
                         >
                           <div className="flex items-center gap-3">
-                            {item.epi_id ? (
-                              <Package className="w-5 h-5 text-emerald-600" />
-                            ) : (
-                              <Wrench className="w-5 h-5 text-orange-600" />
-                            )}
+                            <Package className="w-5 h-5 text-emerald-600" />
                             <div>
                               <p className="font-medium text-slate-900">{item.name || 'Item'}</p>
-                              <p className="text-xs text-slate-500">
-                                {item.epi_id ? 'EPI' : 'Ferramenta'}
-                              </p>
+                              <p className="text-xs text-slate-500">CA: {item.ca_number || 'N/A'}</p>
                             </div>
                           </div>
                           <span className="text-sm font-medium text-slate-700 bg-white px-3 py-1 rounded-full border">
