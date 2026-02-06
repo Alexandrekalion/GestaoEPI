@@ -1,7 +1,45 @@
 from pydantic import BaseModel, EmailStr, Field, ConfigDict
 from typing import Optional, List
-from datetime import datetime
-from models import UserRole, EmployeeStatus, StockMovementType, ItemCondition
+from datetime import datetime, timezone
+from enum import Enum
+from bson import ObjectId
+
+class PyObjectId(str):
+    @classmethod
+    def __get_validators__(cls):
+        yield cls.validate
+
+    @classmethod
+    def validate(cls, v, info=None):
+        if isinstance(v, ObjectId):
+            return str(v)
+        if isinstance(v, str) and ObjectId.is_valid(v):
+            return v
+        raise ValueError("Invalid ObjectId")
+
+class UserRole(str, Enum):
+    SUPER_ADMIN = "super_admin"
+    ADMIN = "admin"
+    GESTOR = "gestor"
+    USER = "user"
+
+class EmployeeStatus(str, Enum):
+    ACTIVE = "active"
+    INACTIVE = "inactive"
+
+class StockMovementType(str, Enum):
+    PURCHASE = "purchase"
+    DELIVERY = "delivery"
+    RETURN = "return"
+    ADJUSTMENT = "adjustment"
+    DISCARD = "discard"
+
+class ItemCondition(str, Enum):
+    NEW = "new"
+    USED = "used"
+    DAMAGED = "damaged"
+
+# ===================== AUTH =====================
 
 class TokenResponse(BaseModel):
     access_token: str
@@ -17,12 +55,14 @@ class ChangePasswordRequest(BaseModel):
     old_password: str
     new_password: str
 
+# ===================== USER =====================
+
 class UserCreate(BaseModel):
     username: str
     email: EmailStr
     password: str
     role: UserRole = UserRole.USER
-    employee_id: Optional[int] = None
+    employee_id: Optional[str] = None
 
 class UserUpdate(BaseModel):
     email: Optional[EmailStr] = None
@@ -30,16 +70,27 @@ class UserUpdate(BaseModel):
     is_active: Optional[bool] = None
 
 class UserResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-    
-    id: int
+    id: str
     username: str
     email: str
     role: UserRole
     is_active: bool
     must_change_password: bool
-    employee_id: Optional[int] = None
+    employee_id: Optional[str] = None
     created_at: datetime
+
+class UserInDB(BaseModel):
+    username: str
+    email: str
+    hashed_password: str
+    role: UserRole = UserRole.USER
+    is_active: bool = True
+    must_change_password: bool = True
+    employee_id: Optional[str] = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+# ===================== COMPANY =====================
 
 class CompanyCreate(BaseModel):
     legal_name: str
@@ -61,9 +112,7 @@ class CompanyUpdate(BaseModel):
     notes: Optional[str] = None
 
 class CompanyResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-    
-    id: int
+    id: str
     legal_name: str
     trade_name: Optional[str] = None
     cnpj: str
@@ -74,6 +123,8 @@ class CompanyResponse(BaseModel):
     notes: Optional[str] = None
     created_at: datetime
 
+# ===================== EMPLOYEE =====================
+
 class EmployeeCreate(BaseModel):
     full_name: str
     cpf: str
@@ -82,7 +133,7 @@ class EmployeeCreate(BaseModel):
     phone: Optional[str] = None
     email: Optional[EmailStr] = None
     registration_number: Optional[str] = None
-    company_id: Optional[int] = None
+    company_id: Optional[str] = None
     department: Optional[str] = None
     position: Optional[str] = None
     status: EmployeeStatus = EmployeeStatus.ACTIVE
@@ -96,7 +147,7 @@ class EmployeeUpdate(BaseModel):
     phone: Optional[str] = None
     email: Optional[EmailStr] = None
     registration_number: Optional[str] = None
-    company_id: Optional[int] = None
+    company_id: Optional[str] = None
     department: Optional[str] = None
     position: Optional[str] = None
     status: Optional[EmployeeStatus] = None
@@ -104,9 +155,7 @@ class EmployeeUpdate(BaseModel):
     notes: Optional[str] = None
 
 class EmployeeResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-    
-    id: int
+    id: str
     full_name: str
     cpf: str
     rg: Optional[str] = None
@@ -114,7 +163,7 @@ class EmployeeResponse(BaseModel):
     phone: Optional[str] = None
     email: Optional[str] = None
     registration_number: Optional[str] = None
-    company_id: Optional[int] = None
+    company_id: Optional[str] = None
     department: Optional[str] = None
     position: Optional[str] = None
     status: EmployeeStatus
@@ -122,6 +171,8 @@ class EmployeeResponse(BaseModel):
     facial_consent: bool
     notes: Optional[str] = None
     created_at: datetime
+
+# ===================== SUPPLIER =====================
 
 class SupplierCreate(BaseModel):
     name: str
@@ -131,15 +182,15 @@ class SupplierCreate(BaseModel):
     email: Optional[EmailStr] = None
 
 class SupplierResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-    
-    id: int
+    id: str
     name: str
     cnpj: Optional[str] = None
     contact: Optional[str] = None
     phone: Optional[str] = None
     email: Optional[str] = None
     created_at: datetime
+
+# ===================== EPI =====================
 
 class EPICreate(BaseModel):
     name: str
@@ -152,7 +203,7 @@ class EPICreate(BaseModel):
     ca_number: str
     ca_validity: Optional[datetime] = None
     technical_standard: Optional[str] = None
-    supplier_id: Optional[int] = None
+    supplier_id: Optional[str] = None
     invoice_number: Optional[str] = None
     purchase_date: Optional[datetime] = None
     quantity_purchased: int = 0
@@ -181,7 +232,7 @@ class EPIUpdate(BaseModel):
     ca_number: Optional[str] = None
     ca_validity: Optional[datetime] = None
     technical_standard: Optional[str] = None
-    supplier_id: Optional[int] = None
+    supplier_id: Optional[str] = None
     invoice_number: Optional[str] = None
     purchase_date: Optional[datetime] = None
     quantity_purchased: Optional[int] = None
@@ -200,9 +251,7 @@ class EPIUpdate(BaseModel):
     max_stock: Optional[int] = None
 
 class EPIResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-    
-    id: int
+    id: str
     name: str
     type_category: str
     brand: Optional[str] = None
@@ -213,7 +262,7 @@ class EPIResponse(BaseModel):
     ca_number: str
     ca_validity: Optional[datetime] = None
     technical_standard: Optional[str] = None
-    supplier_id: Optional[int] = None
+    supplier_id: Optional[str] = None
     invoice_number: Optional[str] = None
     purchase_date: Optional[datetime] = None
     quantity_purchased: int
@@ -232,6 +281,8 @@ class EPIResponse(BaseModel):
     max_stock: Optional[int] = None
     created_at: datetime
 
+# ===================== TOOL =====================
+
 class ToolCreate(BaseModel):
     name: str
     brand: Optional[str] = None
@@ -242,14 +293,12 @@ class ToolCreate(BaseModel):
     condition: ItemCondition = ItemCondition.NEW
     storage_location: Optional[str] = None
     purchase_date: Optional[datetime] = None
-    supplier_id: Optional[int] = None
+    supplier_id: Optional[str] = None
     invoice_number: Optional[str] = None
     notes: Optional[str] = None
 
 class ToolResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-    
-    id: int
+    id: str
     name: str
     brand: Optional[str] = None
     model: Optional[str] = None
@@ -259,14 +308,16 @@ class ToolResponse(BaseModel):
     condition: ItemCondition
     storage_location: Optional[str] = None
     purchase_date: Optional[datetime] = None
-    supplier_id: Optional[int] = None
+    supplier_id: Optional[str] = None
     invoice_number: Optional[str] = None
     notes: Optional[str] = None
     created_at: datetime
 
+# ===================== KIT =====================
+
 class KitItemInput(BaseModel):
-    epi_id: Optional[int] = None
-    tool_id: Optional[int] = None
+    epi_id: Optional[str] = None
+    tool_id: Optional[str] = None
     quantity: int = 1
 
 class KitCreate(BaseModel):
@@ -275,17 +326,18 @@ class KitCreate(BaseModel):
     items: List[KitItemInput] = []
 
 class KitResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-    
-    id: int
+    id: str
     name: str
     description: Optional[str] = None
+    items: List[dict] = []
     created_at: datetime
 
+# ===================== DELIVERY =====================
+
 class DeliveryItemInput(BaseModel):
-    epi_id: Optional[int] = None
-    tool_id: Optional[int] = None
-    kit_id: Optional[int] = None
+    epi_id: Optional[str] = None
+    tool_id: Optional[str] = None
+    kit_id: Optional[str] = None
     quantity: int = 1
     size: Optional[str] = None
     batch: Optional[str] = None
@@ -294,7 +346,7 @@ class DeliveryItemInput(BaseModel):
     notes: Optional[str] = None
 
 class DeliveryCreate(BaseModel):
-    employee_id: int
+    employee_id: str
     delivery_type: str
     is_return: bool = False
     facial_match_score: Optional[float] = None
@@ -302,40 +354,42 @@ class DeliveryCreate(BaseModel):
     items: List[DeliveryItemInput]
 
 class DeliveryResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-    
-    id: int
-    employee_id: int
+    id: str
+    employee_id: str
+    employee_name: Optional[str] = None
     delivery_type: str
     is_return: bool
     photo_evidence_path: Optional[str] = None
     facial_match_score: Optional[float] = None
     notes: Optional[str] = None
-    delivered_by: Optional[int] = None
+    items: List[dict] = []
+    delivered_by: Optional[str] = None
     created_at: datetime
 
+# ===================== STOCK =====================
+
 class StockMovementResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-    
-    id: int
+    id: str
     movement_type: StockMovementType
-    epi_id: Optional[int] = None
-    tool_id: Optional[int] = None
+    epi_id: Optional[str] = None
+    tool_id: Optional[str] = None
     quantity: int
     notes: Optional[str] = None
     created_at: datetime
+
+# ===================== LICENSE =====================
 
 class LicenseAddDaysRequest(BaseModel):
     days: int
     reason: Optional[str] = None
 
 class LicenseResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-    
-    id: int
+    id: str
     expires_at: datetime
     is_blocked: bool
     days_remaining: int
+
+# ===================== DOCUMENT =====================
 
 class DocumentTemplateCreate(BaseModel):
     name: str
@@ -344,15 +398,30 @@ class DocumentTemplateCreate(BaseModel):
     version: str = '1.0'
 
 class DocumentTemplateResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-    
-    id: int
+    id: str
     name: str
     type: str
     content: str
     version: str
     is_active: bool
     created_at: datetime
+
+class DocumentSignatureCreate(BaseModel):
+    template_id: str
+    employee_id: str
+    signature_data: Optional[str] = None
+
+class DocumentSignatureResponse(BaseModel):
+    id: str
+    template_id: str
+    template_name: Optional[str] = None
+    employee_id: str
+    employee_name: Optional[str] = None
+    signature_image_path: Optional[str] = None
+    signed_document_path: Optional[str] = None
+    signed_at: datetime
+
+# ===================== EXTERNAL TEAM =====================
 
 class ExternalTeamCreate(BaseModel):
     company_name: str
@@ -363,9 +432,7 @@ class ExternalTeamCreate(BaseModel):
     service_locations: Optional[str] = None
 
 class ExternalTeamResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-    
-    id: int
+    id: str
     company_name: str
     cnpj: Optional[str] = None
     responsible_person: Optional[str] = None
@@ -375,17 +442,15 @@ class ExternalTeamResponse(BaseModel):
     created_at: datetime
 
 class ExternalMemberCreate(BaseModel):
-    team_id: int
+    team_id: str
     full_name: str
     cpf: Optional[str] = None
     document_number: Optional[str] = None
     notes: Optional[str] = None
 
 class ExternalMemberResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-    
-    id: int
-    team_id: int
+    id: str
+    team_id: str
     full_name: str
     cpf: Optional[str] = None
     document_number: Optional[str] = None
