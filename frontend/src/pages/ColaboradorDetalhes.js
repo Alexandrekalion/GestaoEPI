@@ -1,10 +1,12 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { ArrowLeft, User, Package, AlertTriangle, Calendar, History, FileText } from 'lucide-react';
+import { ArrowLeft, User, Package, AlertTriangle, Calendar, History, FileText, ScanFace, CheckCircle, Trash2 } from 'lucide-react';
 import axios from 'axios';
 import { getAuthHeader } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
+import Webcam from 'react-webcam';
+import * as faceapi from 'face-api.js';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
