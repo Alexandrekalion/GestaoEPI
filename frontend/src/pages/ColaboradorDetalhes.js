@@ -30,7 +30,30 @@ export default function ColaboradorDetalhes() {
 
   useEffect(() => {
     fetchData();
+    loadFaceModels();
   }, [id]);
+  
+  const loadFaceModels = useCallback(async () => {
+    try {
+      await Promise.all([
+        faceapi.nets.tinyFaceDetector.loadFromUri('/models'),
+        faceapi.nets.faceLandmark68Net.loadFromUri('/models'),
+        faceapi.nets.faceRecognitionNet.loadFromUri('/models')
+      ]);
+      setModelsLoaded(true);
+    } catch (error) {
+      console.error('Erro ao carregar modelos faciais:', error);
+    }
+  }, []);
+  
+  const fetchFacialTemplates = async () => {
+    try {
+      const res = await axios.get(`${API}/employees/${id}/facial-templates`, { headers: getAuthHeader() });
+      setFacialTemplates(res.data);
+    } catch (error) {
+      console.error('Erro ao buscar templates:', error);
+    }
+  };
 
   const fetchData = async () => {
     try {
