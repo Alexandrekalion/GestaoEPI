@@ -427,7 +427,6 @@ class LicenseResponse(BaseModel):
 # ===================== FACIAL TEMPLATE =====================
 
 class FacialTemplateCreate(BaseModel):
-    employee_id: str
     descriptor: str
 
 class FacialTemplateResponse(BaseModel):
