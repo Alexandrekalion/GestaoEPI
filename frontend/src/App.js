@@ -8,11 +8,7 @@ import EntregaEPI from '@/pages/EntregaEPI';
 import Colaboradores from '@/pages/Colaboradores';
 import Empresas from '@/pages/Empresas';
 import EPIs from '@/pages/EPIs';
-import Ferramentas from '@/pages/Ferramentas';
 import Kits from '@/pages/Kits';
-import Estoque from '@/pages/Estoque';
-import EquipeExterna from '@/pages/EquipeExterna';
-import Documentacao from '@/pages/Documentacao';
 import Usuarios from '@/pages/Usuarios';
 import Configuracoes from '@/pages/Configuracoes';
 import Fornecedores from '@/pages/Fornecedores';
@@ -44,11 +40,7 @@ function AppRoutes() {
       <Route path="/colaboradores/:id" element={<PrivateRoute><ColaboradorDetalhes /></PrivateRoute>} />
       <Route path="/empresas" element={<PrivateRoute><Empresas /></PrivateRoute>} />
       <Route path="/epis" element={<PrivateRoute><EPIs /></PrivateRoute>} />
-      <Route path="/ferramentas" element={<PrivateRoute><Ferramentas /></PrivateRoute>} />
       <Route path="/kits" element={<PrivateRoute><Kits /></PrivateRoute>} />
-      <Route path="/estoque" element={<PrivateRoute><Estoque /></PrivateRoute>} />
-      <Route path="/equipe-externa" element={<PrivateRoute><EquipeExterna /></PrivateRoute>} />
-      <Route path="/documentacao" element={<PrivateRoute><Documentacao /></PrivateRoute>} />
       <Route path="/fornecedores" element={<PrivateRoute><Fornecedores /></PrivateRoute>} />
       <Route path="/usuarios" element={<PrivateRoute><Usuarios /></PrivateRoute>} />
       <Route path="/configuracoes" element={<PrivateRoute><Configuracoes /></PrivateRoute>} />

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { HardHat, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function Login() {
@@ -27,7 +27,7 @@ export default function Login() {
       console.error('Erro no login:', error);
       
       if (error.response?.status === 403) {
-        toast.error('Preciso ativar o Painel');
+        toast.error('Licença expirada. Contate o administrador.');
       } else if (error.response?.status === 401) {
         toast.error('Credenciais inválidas');
       } else {
@@ -47,9 +47,13 @@ export default function Login() {
         <div className="absolute inset-0 bg-gradient-to-br from-emerald-900/90 to-slate-900/90"></div>
         <div className="absolute inset-0 flex items-center justify-center p-12">
           <div className="text-white max-w-md">
-            <HardHat className="w-16 h-16 mb-6" />
+            <img 
+              src="/icone-cipolatti.png" 
+              alt="Cipolatti" 
+              className="w-20 h-20 mb-6 rounded-lg bg-white p-2"
+            />
             <h1 className="text-4xl font-bold mb-4 tracking-tight">Cipolatti</h1>
-            <p className="text-xl text-emerald-100">Sistema de Gestão de EPI e Ferramentas</p>
+            <p className="text-xl text-emerald-100">Sistema de Gestão de EPI</p>
             <p className="mt-4 text-slate-300">Controle completo de equipamentos de proteção individual com rastreamento por QR Code e reconhecimento facial.</p>
           </div>
         </div>
@@ -59,12 +63,14 @@ export default function Login() {
         <div className="w-full max-w-md">
           <div className="bg-white border border-slate-200 rounded-lg shadow-sm p-8">
             <div className="flex items-center gap-3 mb-8">
-              <div className="w-12 h-12 bg-emerald-500 rounded-md flex items-center justify-center">
-                <HardHat className="w-7 h-7 text-white" />
-              </div>
+              <img 
+                src="/icone-cipolatti.png" 
+                alt="Cipolatti" 
+                className="w-12 h-12 rounded-md object-contain"
+              />
               <div>
                 <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Entrar</h2>
-                <p className="text-sm text-slate-600">Cipolatti</p>
+                <p className="text-sm text-slate-600">Sistema Cipolatti</p>
               </div>
             </div>
 
@@ -117,6 +123,16 @@ export default function Login() {
                 )}
               </button>
             </form>
+
+            <div className="mt-6 text-center">
+              <button 
+                type="button"
+                onClick={() => toast.info('Contate o administrador para redefinir sua senha.')}
+                className="text-sm text-emerald-600 hover:underline"
+              >
+                Esqueci minha senha
+              </button>
+            </div>
           </div>
 
           <p className="text-center text-sm text-slate-600 mt-6">

@@ -6,11 +6,8 @@ import {
   Users, 
   Building2, 
   HardHat, 
-  Wrench, 
   Box, 
   UserCog, 
-  FileText, 
-  UsersRound, 
   Settings,
   LogOut,
   Truck
@@ -21,33 +18,88 @@ export const Sidebar = () => {
   const location = useLocation();
   const { user, logout } = useAuth();
   
+  // Perfis: admin, gestor, rh, seguranca_trabalho, almoxarifado
   const menuItems = [
-    { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', roles: ['super_admin', 'admin', 'gestor'] },
-    { path: '/entrega-epi', icon: HardHat, label: 'Entrega de EPI', roles: ['super_admin', 'admin', 'gestor'] },
-    { path: '/colaboradores', icon: Users, label: 'Colaboradores', roles: ['super_admin', 'admin', 'gestor'] },
-    { path: '/empresas', icon: Building2, label: 'Empresas', roles: ['super_admin', 'admin', 'gestor'] },
-    { path: '/epis', icon: Package, label: 'Cadastro EPI', roles: ['super_admin', 'admin', 'gestor'] },
-    { path: '/fornecedores', icon: Truck, label: 'Fornecedores', roles: ['super_admin', 'admin', 'gestor'] },
-    { path: '/ferramentas', icon: Wrench, label: 'Ferramentas', roles: ['super_admin', 'admin', 'gestor'] },
-    { path: '/kits', icon: Box, label: 'Kits', roles: ['super_admin', 'admin', 'gestor'] },
-    { path: '/estoque', icon: Package, label: 'Estoque', roles: ['super_admin', 'admin', 'gestor'] },
-    { path: '/equipe-externa', icon: UsersRound, label: 'Equipe Externa', roles: ['super_admin', 'admin', 'gestor'] },
-    { path: '/documentacao', icon: FileText, label: 'Documentação', roles: ['super_admin', 'admin', 'gestor'] },
-    { path: '/usuarios', icon: UserCog, label: 'Usuários', roles: ['super_admin', 'admin'] },
-    { path: '/configuracoes', icon: Settings, label: 'Configurações', roles: ['super_admin'] },
+    { 
+      path: '/dashboard', 
+      icon: LayoutDashboard, 
+      label: 'Dashboard', 
+      roles: ['admin', 'gestor', 'rh', 'seguranca_trabalho', 'almoxarifado'] 
+    },
+    { 
+      path: '/entrega-epi', 
+      icon: HardHat, 
+      label: 'Entrega de EPI', 
+      roles: ['admin', 'gestor', 'almoxarifado'] 
+    },
+    { 
+      path: '/colaboradores', 
+      icon: Users, 
+      label: 'Colaboradores', 
+      roles: ['admin', 'gestor', 'rh', 'almoxarifado'] 
+    },
+    { 
+      path: '/empresas', 
+      icon: Building2, 
+      label: 'Empresas', 
+      roles: ['admin', 'gestor', 'rh'] 
+    },
+    { 
+      path: '/epis', 
+      icon: Package, 
+      label: 'Cadastro EPI', 
+      roles: ['admin', 'gestor', 'seguranca_trabalho'] 
+    },
+    { 
+      path: '/fornecedores', 
+      icon: Truck, 
+      label: 'Fornecedores', 
+      roles: ['admin', 'gestor', 'seguranca_trabalho'] 
+    },
+    { 
+      path: '/kits', 
+      icon: Box, 
+      label: 'Kits', 
+      roles: ['admin', 'gestor', 'seguranca_trabalho'] 
+    },
+    { 
+      path: '/usuarios', 
+      icon: UserCog, 
+      label: 'Usuários', 
+      roles: ['admin', 'rh'] 
+    },
+    { 
+      path: '/configuracoes', 
+      icon: Settings, 
+      label: 'Configurações', 
+      roles: ['admin'] 
+    },
   ];
 
   const filteredMenu = menuItems.filter(item => 
     !item.roles || item.roles.includes(user?.role)
   );
 
+  const getProfileLabel = (role) => {
+    const labels = {
+      'admin': 'Administrador',
+      'gestor': 'Gestor',
+      'rh': 'RH',
+      'seguranca_trabalho': 'Seg. Trabalho',
+      'almoxarifado': 'Almoxarifado'
+    };
+    return labels[role] || role;
+  };
+
   return (
     <div className="w-64 bg-slate-900 min-h-screen flex flex-col" data-testid="sidebar">
       <div className="p-6 border-b border-slate-800">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-emerald-500 rounded-md flex items-center justify-center">
-            <HardHat className="w-6 h-6 text-white" />
-          </div>
+          <img 
+            src="/icone-cipolatti.png" 
+            alt="Cipolatti" 
+            className="w-10 h-10 rounded-md object-contain bg-white p-1"
+          />
           <div>
             <h1 className="text-white font-bold text-lg tracking-tight">Cipolatti</h1>
             <p className="text-slate-400 text-xs">Gestão de EPI</p>
@@ -87,7 +139,7 @@ export const Sidebar = () => {
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-white text-sm font-medium truncate">{user?.username}</p>
-            <p className="text-slate-400 text-xs truncate">{user?.role}</p>
+            <p className="text-emerald-400 text-xs truncate">{getProfileLabel(user?.role)}</p>
           </div>
         </div>
         <button
