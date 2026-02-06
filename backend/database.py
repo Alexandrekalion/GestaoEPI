@@ -1,5 +1,5 @@
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
-from sqlalchemy.orm import declarative_base
+from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo import IndexModel, ASCENDING
 import os
 from pathlib import Path
 from dotenv import load_dotenv
@@ -7,31 +7,65 @@ from dotenv import load_dotenv
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-DATABASE_URL = os.environ.get('DATABASE_URL', 'postgresql+asyncpg://cipolatti:cipolatti123@localhost:5432/cipolatti_db')
+MONGO_URL = os.environ.get('MONGO_URL')
+DB_NAME = os.environ.get('DB_NAME', 'cipolatti_db')
 
-engine = create_async_engine(DATABASE_URL, echo=False, pool_pre_ping=True)
+client = None
+db = None
 
-AsyncSessionLocal = async_sessionmaker(
-    engine,
-    class_=AsyncSession,
-    expire_on_commit=False,
-    autocommit=False,
-    autoflush=False,
-)
+async def connect_db():
+    global client, db
+    client = AsyncIOMotorClient(MONGO_URL)
+    db = client[DB_NAME]
+    await create_indexes()
+    return db
 
-Base = declarative_base()
+async def close_db():
+    global client
+    if client:
+        client.close()
 
 async def get_db():
-    async with AsyncSessionLocal() as session:
-        try:
-            yield session
-            await session.commit()
-        except Exception:
-            await session.rollback()
-            raise
-        finally:
-            await session.close()
+    global db
+    if db is None:
+        await connect_db()
+    return db
 
-async def init_db():
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+async def create_indexes():
+    global db
+    
+    # Users indexes
+    await db.users.create_indexes([
+        IndexModel([("username", ASCENDING)], unique=True),
+        IndexModel([("email", ASCENDING)], unique=True)
+    ])
+    
+    # Employees indexes
+    await db.employees.create_indexes([
+        IndexModel([("cpf", ASCENDING)], unique=True),
+        IndexModel([("full_name", ASCENDING)])
+    ])
+    
+    # Companies indexes
+    await db.companies.create_indexes([
+        IndexModel([("cnpj", ASCENDING)], unique=True)
+    ])
+    
+    # EPIs indexes
+    await db.epis.create_indexes([
+        IndexModel([("ca_number", ASCENDING)]),
+        IndexModel([("internal_code", ASCENDING)], unique=True, sparse=True),
+        IndexModel([("qr_code", ASCENDING)], unique=True, sparse=True)
+    ])
+    
+    # Tools indexes
+    await db.tools.create_indexes([
+        IndexModel([("serial_number", ASCENDING)], unique=True, sparse=True),
+        IndexModel([("internal_code", ASCENDING)], unique=True, sparse=True),
+        IndexModel([("qr_code", ASCENDING)], unique=True, sparse=True)
+    ])
+    
+    # Suppliers indexes
+    await db.suppliers.create_indexes([
+        IndexModel([("cnpj", ASCENDING)], unique=True, sparse=True)
+    ])
