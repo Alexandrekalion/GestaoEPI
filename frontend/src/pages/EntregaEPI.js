@@ -428,33 +428,83 @@ export default function EntregaEPI() {
                 </div>
               </div>
             </div>
+            
+            {/* Status de carregamento */}
+            {loadingStatus && (
+              <div className="flex items-center justify-center gap-3 py-3 px-4 bg-slate-100 rounded-lg mb-4">
+                <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
+                <span className="text-sm text-slate-700">{loadingStatus}</span>
+              </div>
+            )}
+            
+            {/* Info de templates carregados */}
+            {templatesLoaded && facialTemplatesCache.length > 0 && (
+              <div className="flex items-center gap-2 text-sm text-emerald-700 bg-emerald-50 px-4 py-2 rounded-lg mb-4">
+                <CheckCircle2 className="w-4 h-4" />
+                <span>{facialTemplatesCache.length} colaborador(es) com biometria cadastrada</span>
+              </div>
+            )}
+            
+            {templatesLoaded && facialTemplatesCache.length === 0 && (
+              <div className="flex items-center gap-2 text-sm text-amber-700 bg-amber-50 px-4 py-2 rounded-lg mb-4">
+                <AlertTriangle className="w-4 h-4" />
+                <span>Nenhum colaborador com biometria cadastrada. Cadastre na ficha do colaborador.</span>
+              </div>
+            )}
 
-            {!modelsLoaded ? (
+            {!modelsLoaded || !templatesLoaded ? (
               <div className="flex flex-col items-center justify-center py-12">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mb-4"></div>
-                <p className="text-slate-600">Carregando modelos de reconhecimento facial...</p>
+                <p className="text-slate-600">
+                  {!modelsLoaded ? 'Carregando modelos de IA...' : 'Carregando base de dados facial...'}
+                </p>
               </div>
             ) : (
               <div className="max-w-xl mx-auto">
                 {showWebcam && (
                   <>
-                    <Webcam
-                      ref={webcamRef}
-                      audio={false}
-                      screenshotFormat="image/jpeg"
-                      className="w-full rounded-lg mb-4 border-4 border-blue-200"
-                      videoConstraints={{
-                        facingMode: "user"
-                      }}
-                    />
+                    <div className="relative">
+                      <Webcam
+                        ref={webcamRef}
+                        audio={false}
+                        screenshotFormat="image/jpeg"
+                        screenshotQuality={0.92}
+                        className="w-full rounded-lg border-4 border-blue-200"
+                        videoConstraints={{
+                          facingMode: "user",
+                          width: { ideal: 640 },
+                          height: { ideal: 480 },
+                          frameRate: { ideal: 30 }
+                        }}
+                        mirrored={true}
+                      />
+                      {/* Guia de posicionamento */}
+                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                        <div className="w-48 h-60 border-4 border-dashed border-blue-400 rounded-3xl opacity-60"></div>
+                      </div>
+                    </div>
+                    
+                    <p className="text-center text-sm text-slate-500 mt-2 mb-4">
+                      Posicione o rosto dentro da área tracejada
+                    </p>
+                    
                     <button
                       onClick={searchByFace}
-                      disabled={loading}
-                      className="w-full bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-md px-4 py-4 flex items-center justify-center gap-2 disabled:opacity-50 text-lg"
+                      disabled={loading || facialTemplatesCache.length === 0}
+                      className="w-full bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-lg px-4 py-4 flex items-center justify-center gap-2 disabled:opacity-50 text-lg transition-colors"
                       data-testid="facial-identify-button"
                     >
-                      <ScanFace className="w-6 h-6" />
-                      {loading ? 'Identificando...' : 'Identificar Colaborador'}
+                      {loading ? (
+                        <>
+                          <Loader2 className="w-6 h-6 animate-spin" />
+                          Identificando...
+                        </>
+                      ) : (
+                        <>
+                          <ScanFace className="w-6 h-6" />
+                          Identificar Colaborador
+                        </>
+                      )}
                     </button>
                   </>
                 )}
