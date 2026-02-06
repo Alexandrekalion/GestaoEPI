@@ -126,11 +126,30 @@ export default function Kits() {
 
   const handleEdit = (kit) => {
     setEditingKit(kit);
+    // Enriquecer itens com dados dos EPIs (para kits antigos que podem não ter os detalhes)
+    const enrichedItems = (kit.items || []).map(item => {
+      // Se o item já tem nome, usar os dados existentes
+      if (item.name) {
+        return item;
+      }
+      // Se não tem nome, buscar do EPI correspondente
+      const epi = epis.find(e => e.id === item.epi_id);
+      if (epi) {
+        return {
+          ...item,
+          name: epi.name,
+          ca_number: epi.ca_number,
+          type_category: epi.type_category
+        };
+      }
+      return item;
+    });
+    
     setFormData({
       name: kit.name || '',
       description: kit.description || '',
       sector: kit.sector || '',
-      items: kit.items || []
+      items: enrichedItems
     });
     setShowDialog(true);
   };
@@ -147,9 +166,25 @@ export default function Kits() {
   };
 
   const handlePrint = (kit) => {
-    const itemsList = kit.items?.map(item => `
+    // Enriquecer itens com dados dos EPIs para impressão
+    const enrichedItems = (kit.items || []).map(item => {
+      if (item.name) {
+        return item;
+      }
+      const epi = epis.find(e => e.id === item.epi_id);
+      if (epi) {
+        return {
+          ...item,
+          name: epi.name,
+          ca_number: epi.ca_number
+        };
+      }
+      return { ...item, name: 'EPI não encontrado' };
+    });
+    
+    const itemsList = enrichedItems.map(item => `
       <tr>
-        <td style="padding: 8px; border-bottom: 1px solid #ddd;">${item.name}</td>
+        <td style="padding: 8px; border-bottom: 1px solid #ddd;">${item.name || 'Item sem nome'}</td>
         <td style="padding: 8px; border-bottom: 1px solid #ddd;">${item.ca_number || '-'}</td>
         <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: center;">${item.quantity}</td>
       </tr>
@@ -194,7 +229,24 @@ export default function Kits() {
   };
 
   const openKitDetails = (kit) => {
-    setSelectedKit(kit);
+    // Enriquecer itens com dados dos EPIs para visualização
+    const enrichedItems = (kit.items || []).map(item => {
+      if (item.name) {
+        return item;
+      }
+      const epi = epis.find(e => e.id === item.epi_id);
+      if (epi) {
+        return {
+          ...item,
+          name: epi.name,
+          ca_number: epi.ca_number,
+          type_category: epi.type_category
+        };
+      }
+      return { ...item, name: 'EPI não encontrado' };
+    });
+    
+    setSelectedKit({ ...kit, items: enrichedItems });
     setShowViewDialog(true);
   };
 
