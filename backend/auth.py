@@ -4,13 +4,11 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-from models import User, UserRole
 from database import get_db
+from bson import ObjectId
 import os
 
-SECRET_KEY = os.environ.get('SECRET_KEY', 'your-secret-key-change-in-production-cipolatti-2026')
+SECRET_KEY = os.environ.get('SECRET_KEY', 'cipolatti-secret-key-production-2026-emerald')
 ALGORITHM = 'HS256'
 ACCESS_TOKEN_EXPIRE_MINUTES = 480
 
@@ -34,9 +32,8 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     return encoded_jwt
 
 async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: AsyncSession = Depends(get_db)
-) -> User:
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail='Credenciais inválidas',
@@ -51,17 +48,19 @@ async def get_current_user(
     except JWTError:
         raise credentials_exception
     
-    result = await db.execute(select(User).filter(User.username == username))
-    user = result.scalar_one_or_none()
+    db = await get_db()
+    user = await db.users.find_one({"username": username})
     if user is None:
         raise credentials_exception
-    if not user.is_active:
+    if not user.get('is_active', True):
         raise HTTPException(status_code=400, detail='Usuário inativo')
+    
+    user['id'] = str(user['_id'])
     return user
 
-def require_role(*allowed_roles: UserRole):
-    async def role_checker(current_user: User = Depends(get_current_user)):
-        if current_user.role not in allowed_roles:
+def require_role(*allowed_roles):
+    async def role_checker(current_user: dict = Depends(get_current_user)):
+        if current_user.get('role') not in allowed_roles:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail='Permissão insuficiente'
