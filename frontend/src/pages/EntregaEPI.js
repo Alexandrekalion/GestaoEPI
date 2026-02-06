@@ -186,10 +186,15 @@ export default function EntregaEPI() {
     }
   };
 
-  // RECONHECIMENTO FACIAL OBRIGATÓRIO
+  // RECONHECIMENTO FACIAL OTIMIZADO
   const searchByFace = async () => {
     if (!webcamRef.current || !modelsLoaded) {
       toast.error('Câmera ou modelos não carregados. Aguarde...');
+      return;
+    }
+    
+    if (facialTemplatesCache.length === 0) {
+      toast.error('Nenhum colaborador com biometria cadastrada. Cadastre templates na ficha do colaborador.');
       return;
     }
 
@@ -200,55 +205,50 @@ export default function EntregaEPI() {
     }
 
     setLoading(true);
+    setLoadingStatus('Detectando rosto...');
+    
     try {
+      // Criar imagem a partir do screenshot
       const img = await faceapi.fetchImage(imageSrc);
+      
+      // Detectar rosto com opções otimizadas
+      setLoadingStatus('Processando características faciais...');
       const detection = await faceapi
-        .detectSingleFace(img, new faceapi.TinyFaceDetectorOptions())
+        .detectSingleFace(img, FACE_DETECTOR_OPTIONS)
         .withFaceLandmarks()
         .withFaceDescriptor();
 
       if (!detection) {
-        toast.error('Nenhum rosto detectado. Posicione-se melhor e tente novamente.');
+        toast.error('Nenhum rosto detectado. Posicione o rosto de frente para a câmera.');
         setLoading(false);
+        setLoadingStatus('');
         return;
       }
-
-      // Buscar templates de todos os colaboradores
-      let bestMatch = { employee: null, score: 0 };
       
-      for (const employee of allEmployees) {
-        // Verificar se colaborador tem foto
-        if (!employee.photo_path) continue;
+      // Comparar com templates em cache (MUITO MAIS RÁPIDO)
+      setLoadingStatus('Identificando colaborador...');
+      let bestMatch = { employee: null, score: 0, distance: 1 };
+      
+      for (const cached of facialTemplatesCache) {
+        const distance = faceapi.euclideanDistance(detection.descriptor, cached.descriptor);
+        const similarity = 1 - distance;
         
-        try {
-          const templatesRes = await axios.get(
-            `${API}/employees/${employee.id}/facial-templates`,
-            { headers: getAuthHeader() }
-          );
-
-          if (templatesRes.data.length > 0) {
-            for (const template of templatesRes.data) {
-              try {
-                const savedDescriptor = JSON.parse(template.descriptor);
-                const distance = faceapi.euclideanDistance(detection.descriptor, savedDescriptor);
-                const similarity = 1 - distance;
-                
-                if (similarity > bestMatch.score) {
-                  bestMatch = { employee, score: similarity };
-                }
-              } catch (e) {
-                console.error('Erro ao processar template:', e);
-              }
-            }
-          }
-        } catch (e) {
-          // Colaborador sem template
+        if (similarity > bestMatch.score) {
+          bestMatch = { 
+            employee: cached.employee, 
+            score: similarity,
+            distance: distance
+          };
         }
       }
 
-      const threshold = 0.5;
+      // Threshold ajustado para melhor precisão
+      // distance < 0.6 = bom match, < 0.5 = excelente match
+      const threshold = 0.4; // similarity >= 0.4 significa distance <= 0.6
+      
       if (bestMatch.score >= threshold && bestMatch.employee) {
-        toast.success(`Colaborador identificado: ${bestMatch.employee.full_name}`);
+        const percentMatch = Math.round(bestMatch.score * 100);
+        toast.success(`✓ ${bestMatch.employee.full_name} identificado (${percentMatch}% similaridade)`);
         setFacialMatch({ score: bestMatch.score, verified: true });
         setCapturedPhoto(imageSrc);
         setSelectedEmployee(bestMatch.employee);
@@ -256,13 +256,15 @@ export default function EntregaEPI() {
         setShowWebcam(false);
         setStep('delivery');
       } else {
-        toast.error('Colaborador não reconhecido. Verifique se possui foto cadastrada ou procure o RH.');
+        const percentMatch = Math.round(bestMatch.score * 100);
+        toast.error(`Colaborador não reconhecido (melhor match: ${percentMatch}%). Verifique se possui biometria cadastrada.`);
       }
     } catch (error) {
       console.error('Erro na busca facial:', error);
       toast.error('Erro ao processar reconhecimento facial');
     } finally {
       setLoading(false);
+      setLoadingStatus('');
     }
   };
 
