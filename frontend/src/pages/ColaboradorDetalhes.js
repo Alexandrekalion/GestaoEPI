@@ -20,6 +20,13 @@ export default function ColaboradorDetalhes() {
   const [documentos, setDocumentos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('resumo');
+  
+  // Estados para biometria facial
+  const [facialTemplates, setFacialTemplates] = useState([]);
+  const [showWebcam, setShowWebcam] = useState(false);
+  const [modelsLoaded, setModelsLoaded] = useState(false);
+  const [capturingFace, setCapturingFace] = useState(false);
+  const webcamRef = useRef(null);
 
   useEffect(() => {
     fetchData();
