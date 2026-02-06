@@ -398,6 +398,132 @@ export default function ColaboradorDetalhes() {
             )}
           </div>
         )}
+        
+        {/* Biometria Facial */}
+        {activeTab === 'biometria' && (
+          <div className="bg-white border border-slate-200 rounded-lg shadow-sm p-6">
+            <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
+              <ScanFace className="w-5 h-5 text-blue-600" />
+              Cadastro de Biometria Facial
+            </h3>
+            
+            {!colaborador.photo_path && (
+              <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg mb-6">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-medium text-amber-800">Foto não cadastrada</p>
+                    <p className="text-sm text-amber-700">Para utilizar o reconhecimento facial, é necessário que o colaborador tenha uma foto cadastrada.</p>
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            {/* Templates cadastrados */}
+            <div className="mb-6">
+              <h4 className="font-medium text-slate-700 mb-3">Templates Faciais Cadastrados</h4>
+              {facialTemplates.length === 0 ? (
+                <div className="p-6 bg-slate-50 border border-slate-200 rounded-lg text-center">
+                  <ScanFace className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+                  <p className="text-slate-500">Nenhum template facial cadastrado</p>
+                  <p className="text-sm text-slate-400 mt-1">Cadastre ao menos um template para habilitar o reconhecimento facial</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {facialTemplates.map((template, idx) => (
+                    <div 
+                      key={template.id} 
+                      className="flex items-center justify-between p-4 bg-emerald-50 border border-emerald-200 rounded-lg"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center">
+                          <CheckCircle className="w-5 h-5 text-emerald-600" />
+                        </div>
+                        <div>
+                          <p className="font-medium text-slate-900">Template Facial #{idx + 1}</p>
+                          <p className="text-sm text-slate-600">
+                            Cadastrado em: {new Date(template.created_at).toLocaleString('pt-BR')}
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => deleteFacialTemplate(template.id)}
+                        className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Excluir template"
+                      >
+                        <Trash2 className="w-5 h-5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            
+            {/* Captura de novo template */}
+            <div className="border-t pt-6">
+              <h4 className="font-medium text-slate-700 mb-3">Cadastrar Novo Template</h4>
+              
+              {!modelsLoaded ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mr-3"></div>
+                  <span className="text-slate-600">Carregando modelos de reconhecimento...</span>
+                </div>
+              ) : !showWebcam ? (
+                <button
+                  onClick={() => setShowWebcam(true)}
+                  className="w-full bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-lg px-4 py-4 flex items-center justify-center gap-2"
+                  data-testid="start-facial-capture"
+                >
+                  <ScanFace className="w-5 h-5" />
+                  Iniciar Captura Facial
+                </button>
+              ) : (
+                <div className="space-y-4">
+                  <div className="relative">
+                    <Webcam
+                      ref={webcamRef}
+                      audio={false}
+                      screenshotFormat="image/jpeg"
+                      className="w-full rounded-lg border-4 border-blue-200"
+                      videoConstraints={{
+                        facingMode: "user",
+                        width: 640,
+                        height: 480
+                      }}
+                    />
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                      <div className="w-48 h-64 border-4 border-dashed border-blue-400 rounded-3xl opacity-50"></div>
+                    </div>
+                  </div>
+                  
+                  <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                    <p className="text-sm text-blue-800">
+                      <strong>Dica:</strong> Posicione o rosto do colaborador dentro da área tracejada, com boa iluminação e sem obstáculos.
+                    </p>
+                  </div>
+                  
+                  <div className="flex gap-3">
+                    <button
+                      onClick={captureFacialTemplate}
+                      disabled={capturingFace}
+                      className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white font-medium rounded-lg px-4 py-3 flex items-center justify-center gap-2 disabled:opacity-50"
+                      data-testid="capture-facial-button"
+                    >
+                      <CheckCircle className="w-5 h-5" />
+                      {capturingFace ? 'Processando...' : 'Capturar e Salvar'}
+                    </button>
+                    <button
+                      onClick={() => setShowWebcam(false)}
+                      className="bg-slate-200 hover:bg-slate-300 text-slate-700 font-medium rounded-lg px-6 py-3"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Histórico Completo */}
         {activeTab === 'historico' && (
