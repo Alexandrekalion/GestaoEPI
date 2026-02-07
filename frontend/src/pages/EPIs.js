@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { Plus, Package, Search } from 'lucide-react';
+import { Plus, Package, Search, AlertTriangle, Calendar, X } from 'lucide-react';
 import axios from 'axios';
 import { getAuthHeader } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -11,11 +12,13 @@ const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
 export default function EPIs() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [epis, setEpis] = useState([]);
   const [fornecedores, setFornecedores] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showDialog, setShowDialog] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [activeFilter, setActiveFilter] = useState(searchParams.get('filter') || 'all');
   const [formData, setFormData] = useState({
     name: '',
     type_category: '',
