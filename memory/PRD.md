@@ -35,33 +35,32 @@ O usuário solicitou um sistema completo com:
 - [x] Políticas de senha (complexidade + expiração 30 dias)
 - [x] Dashboard com cards interativos e navegação filtrada
 - [x] Cadastro de Empresas, Fornecedores, EPIs
-- [x] Gestão de Kits com EPIs (bug de descrição corrigido)
+- [x] Gestão de Kits com EPIs
 - [x] Gestão de Colaboradores com foto grande na lista
 - [x] Tela de Entrega de EPI com reconhecimento facial obrigatório
 - [x] Tela de Configurações (contador de licença)
 - [x] Tela de Usuários com gestão de perfis e reset de senha
 - [x] Ícone da empresa no login e sidebar
+- [x] Layout responsivo para smartphones
 
 ### ✅ Implementado Hoje (07/02/2026)
-- [x] **Dashboard Interativo:**
-  - Clicar em "Estoque Baixo" → vai para EPIs filtrados por estoque baixo
-  - Clicar em "Validade Próxima" → vai para EPIs próximos do vencimento
-  - Filtros visuais com botões (Todos, Estoque Baixo, Vencimento)
-  - Alertas visuais: linhas laranjas para estoque baixo, vermelhas para vencidos
+- [x] **Interface de Captura Ampliada:**
+  - Área de webcam com fundo escuro para melhor contraste
+  - Guia de enquadramento 64x80 (45% maior que antes)
+  - Marcadores de canto para facilitar posicionamento
+  - minHeight: 400px garantindo área visível adequada
   
-- [x] **Layout Responsivo Mobile:**
-  - Menu hamburger no mobile
-  - Sidebar deslizante com overlay
-  - Colaboradores em cards (não tabela) no mobile
-  - EPIs com tabela responsiva
-
-- [x] **Reconhecimento Facial Otimizado:**
-  - Cache de templates faciais (carrega uma vez)
-  - Detecção contínua de rosto em tempo real
-  - Feedback visual: borda verde quando rosto detectado
-  - Status: "Aguardando rosto..." / "Pronto para capturar!"
-  - Botão só ativa quando rosto é detectado
-  - Qualidade de imagem 1280x720 para melhor precisão
+- [x] **Processamento Facial Robusto:**
+  - inputSize: 608 para maior precisão
+  - Logs detalhados para debug (score, landmarks, descriptor)
+  - Mensagens de erro específicas com % de qualidade
+  - Tratamento de erros da API com detalhes
+  
+- [x] **Assinatura Facial no Histórico:**
+  - Foto da captura exibida ao lado de cada entrega
+  - Badge com % de match da verificação facial
+  - Endpoint /api/deliveries/save-photo funcional
+  - Campo facial_photo_path salvo em cada delivery
 
 ---
 
@@ -81,49 +80,45 @@ O usuário solicitou um sistema completo com:
 
 ---
 
+## Fluxo de Reconhecimento Facial
+
+### Cadastro de Template
+1. Colaboradores → Ver Ficha → Aba "Biometria Facial"
+2. Clique em "Iniciar Captura Facial"
+3. Posicione o rosto na área tracejada (verde = detectado)
+4. Clique "Capturar Agora" quando borda ficar verde
+5. Sistema salva descriptor de 128 dimensões no banco
+
+### Entrega de EPI
+1. Entrega de EPI → Posicione rosto na câmera
+2. Clique "Identificar Colaborador"
+3. Sistema compara com todos os templates cadastrados
+4. Se match >= 40%, identifica e libera entrega
+5. Foto da captura é salva como "assinatura facial"
+
+### Validade Jurídica
+- Cada entrega armazena:
+  - facial_photo_path: foto do momento da entrega
+  - facial_match_score: % de similaridade
+  - delivered_by: responsável pela entrega
+  - created_at: timestamp preciso
+- Histórico do colaborador exibe foto ao lado de cada item
+
+---
+
 ## Arquitetura de Arquivos
 
 ```
 /app/
 ├── backend/
-│   ├── server.py       # API FastAPI com todas as rotas
+│   ├── server.py       # API FastAPI
 │   ├── schemas.py      # Modelos Pydantic
-│   ├── database.py     # Conexão MongoDB
-│   ├── auth.py         # Autenticação JWT
-│   ├── seed.py         # Seed de dados iniciais
-│   └── tests/          # Testes pytest
+│   └── uploads/deliveries/  # Fotos de entrega
 └── frontend/
-    ├── public/
-    │   ├── icone-cipolatti.png
-    │   └── models/     # Modelos face-api.js
-    ├── src/
-    │   ├── pages/
-    │   │   ├── Dashboard.js            # Cards interativos
-    │   │   ├── EPIs.js                 # Filtros + alertas visuais
-    │   │   ├── Colaboradores.js        # Fotos + layout mobile
-    │   │   ├── ColaboradorDetalhes.js  # Biometria otimizada
-    │   │   └── EntregaEPI.js           # Reconhecimento facial
-    │   ├── components/layout/
-    │   │   ├── DashboardLayout.js      # Layout responsivo
-    │   │   └── Sidebar.js              # Menu mobile
-    │   └── contexts/
-    └── .env
+    ├── public/models/  # Modelos face-api.js
+    ├── src/pages/
+    │   ├── ColaboradorDetalhes.js  # Biometria + Histórico com foto
+    │   └── EntregaEPI.js           # Reconhecimento + Captura
+    └── src/components/layout/
+        └── DashboardLayout.js      # Layout responsivo
 ```
-
-## Endpoints Principais
-- POST /api/auth/login
-- GET /api/auth/me
-- CRUD /api/users, /api/companies, /api/employees, /api/epis, /api/kits, /api/suppliers
-- GET, POST, DELETE /api/employees/{id}/facial-templates
-- POST /api/deliveries
-- GET /api/license, POST /api/license/add-days
-- GET /api/dashboard/stats
-- GET /api/stock/alerts
-
-## Fluxo de Reconhecimento Facial
-1. **Cadastrar colaborador** com foto (tela Colaboradores)
-2. **Cadastrar template facial** na aba Biometria da ficha do colaborador
-   - Detecção em tempo real mostra borda verde quando rosto detectado
-   - Botão "Capturar Agora" só ativa com rosto detectado
-3. **Entrega de EPI:** Sistema compara rosto capturado com templates cadastrados
-4. Se match >= 40%, identifica colaborador e libera entrega
