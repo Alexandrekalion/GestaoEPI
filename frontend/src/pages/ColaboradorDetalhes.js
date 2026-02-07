@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { ArrowLeft, User, Package, AlertTriangle, Calendar, History, FileText, ScanFace, CheckCircle, Trash2 } from 'lucide-react';
+import { ArrowLeft, User, Package, AlertTriangle, Calendar, History, FileText, ScanFace, CheckCircle, Trash2, Loader2, Camera } from 'lucide-react';
 import axios from 'axios';
 import { getAuthHeader } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -10,6 +10,12 @@ import * as faceapi from 'face-api.js';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
+
+// Configurações otimizadas para captura rápida
+const FAST_DETECTOR_OPTIONS = new faceapi.TinyFaceDetectorOptions({
+  inputSize: 320,       // Menor = mais rápido para captura
+  scoreThreshold: 0.6   // Maior threshold para melhor qualidade
+});
 
 export default function ColaboradorDetalhes() {
   const { id } = useParams();
@@ -26,12 +32,52 @@ export default function ColaboradorDetalhes() {
   const [showWebcam, setShowWebcam] = useState(false);
   const [modelsLoaded, setModelsLoaded] = useState(false);
   const [capturingFace, setCapturingFace] = useState(false);
+  const [faceDetected, setFaceDetected] = useState(false);
+  const [captureStatus, setCaptureStatus] = useState('');
   const webcamRef = useRef(null);
+  const detectionIntervalRef = useRef(null);
 
   useEffect(() => {
     fetchData();
     loadFaceModels();
+    
+    return () => {
+      // Limpar intervalo ao desmontar
+      if (detectionIntervalRef.current) {
+        clearInterval(detectionIntervalRef.current);
+      }
+    };
   }, [id]);
+  
+  // Detecção contínua de rosto para feedback em tempo real
+  useEffect(() => {
+    if (showWebcam && modelsLoaded && webcamRef.current) {
+      detectionIntervalRef.current = setInterval(async () => {
+        if (webcamRef.current && !capturingFace) {
+          try {
+            const imageSrc = webcamRef.current.getScreenshot();
+            if (imageSrc) {
+              const img = await faceapi.fetchImage(imageSrc);
+              const detection = await faceapi.detectSingleFace(img, FAST_DETECTOR_OPTIONS);
+              setFaceDetected(!!detection && detection.score > 0.6);
+            }
+          } catch (e) {
+            // Ignorar erros silenciosos durante detecção contínua
+          }
+        }
+      }, 500); // Verificar a cada 500ms
+    } else {
+      if (detectionIntervalRef.current) {
+        clearInterval(detectionIntervalRef.current);
+      }
+    }
+    
+    return () => {
+      if (detectionIntervalRef.current) {
+        clearInterval(detectionIntervalRef.current);
+      }
+    };
+  }, [showWebcam, modelsLoaded, capturingFace]);
   
   const loadFaceModels = useCallback(async () => {
     try {
