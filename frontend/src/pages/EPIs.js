@@ -182,18 +182,31 @@ export default function EPIs() {
   return (
     <DashboardLayout>
       <div className="space-y-6" data-testid="epis-page">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Cadastro de EPIs</h1>
-            <p className="text-slate-600 mt-1">Gerencie os equipamentos de proteção individual</p>
+            <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">{getFilterTitle()}</h1>
+            <p className="text-slate-600 mt-1">
+              {activeFilter === 'all' 
+                ? 'Gerencie os equipamentos de proteção individual'
+                : `Mostrando ${filteredEPIs.length} item(s) filtrado(s)`
+              }
+            </p>
           </div>
-          <Dialog open={showDialog} onOpenChange={setShowDialog}>
-            <DialogTrigger asChild>
-              <Button className="bg-emerald-500 hover:bg-emerald-600" data-testid="add-epi-button">
-                <Plus className="w-4 h-4 mr-2" />
-                Novo EPI
+          <div className="flex gap-2">
+            {activeFilter !== 'all' && (
+              <Button variant="outline" onClick={clearFilter} className="gap-2">
+                <X className="w-4 h-4" />
+                Limpar Filtro
               </Button>
-            </DialogTrigger>
+            )}
+            <Dialog open={showDialog} onOpenChange={setShowDialog}>
+              <DialogTrigger asChild>
+                <Button className="bg-emerald-500 hover:bg-emerald-600" data-testid="add-epi-button">
+                  <Plus className="w-4 h-4 mr-2" />
+                  <span className="hidden sm:inline">Novo EPI</span>
+                  <span className="sm:hidden">Novo</span>
+                </Button>
+              </DialogTrigger>
             <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Cadastrar Novo EPI</DialogTitle>
