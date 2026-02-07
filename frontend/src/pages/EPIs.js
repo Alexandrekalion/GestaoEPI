@@ -48,6 +48,30 @@ export default function EPIs() {
   useEffect(() => {
     fetchData();
   }, []);
+  
+  // Atualizar filtro quando URL mudar
+  useEffect(() => {
+    const filter = searchParams.get('filter');
+    if (filter) {
+      setActiveFilter(filter);
+    }
+  }, [searchParams]);
+  
+  // Funções auxiliares para filtros
+  const isLowStock = (epi) => epi.current_stock <= epi.min_stock;
+  
+  const isExpiringSoon = (epi) => {
+    if (!epi.validity_date) return false;
+    const today = new Date();
+    const validity = new Date(epi.validity_date);
+    const diffDays = Math.ceil((validity - today) / (1000 * 60 * 60 * 24));
+    return diffDays <= 30 && diffDays >= 0;
+  };
+  
+  const isExpired = (epi) => {
+    if (!epi.validity_date) return false;
+    return new Date(epi.validity_date) < new Date();
+  };
 
   const fetchData = async () => {
     try {
