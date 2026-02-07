@@ -185,36 +185,54 @@ export default function ColaboradorDetalhes() {
       // Capturar screenshot de alta qualidade
       const imageSrc = webcamRef.current.getScreenshot();
       if (!imageSrc) {
-        toast.error('Não foi possível capturar a imagem');
-        setCapturingFace(false);
-        return;
-      }
-      
-      setCaptureStatus('Analisando face...');
-      const img = await faceapi.fetchImage(imageSrc);
-      
-      // Usar configuração de alta qualidade para o template final
-      const highQualityOptions = new faceapi.TinyFaceDetectorOptions({
-        inputSize: 512,
-        scoreThreshold: 0.5
-      });
-      
-      setCaptureStatus('Extraindo características...');
-      const detection = await faceapi
-        .detectSingleFace(img, highQualityOptions)
-        .withFaceLandmarks()
-        .withFaceDescriptor();
-      
-      if (!detection) {
-        toast.error('Rosto não detectado com qualidade suficiente. Tente novamente.');
+        toast.error('Não foi possível capturar a imagem da câmera');
         setCapturingFace(false);
         setCaptureStatus('');
         return;
       }
       
-      // Verificar qualidade da detecção
-      if (detection.detection.score < 0.6) {
-        toast.error('Qualidade da imagem baixa. Melhore a iluminação e tente novamente.');
+      setCaptureStatus('Processando imagem...');
+      
+      // Criar imagem a partir do base64
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = reject;
+        img.src = imageSrc;
+      });
+      
+      setCaptureStatus('Detectando face...');
+      
+      // Usar configuração otimizada para detecção
+      const detectorOptions = new faceapi.TinyFaceDetectorOptions({
+        inputSize: 608,  // Maior resolução para melhor qualidade
+        scoreThreshold: 0.4  // Threshold mais baixo para captura
+      });
+      
+      const detection = await faceapi
+        .detectSingleFace(img, detectorOptions)
+        .withFaceLandmarks()
+        .withFaceDescriptor();
+      
+      if (!detection) {
+        toast.error('Rosto não detectado. Certifique-se de que o rosto está bem iluminado e centralizado.');
+        setCapturingFace(false);
+        setCaptureStatus('');
+        return;
+      }
+      
+      // Log para debug
+      console.log('Detecção:', {
+        score: detection.detection.score,
+        landmarks: detection.landmarks.positions.length,
+        descriptor: detection.descriptor.length
+      });
+      
+      // Verificar qualidade mínima
+      if (detection.detection.score < 0.5) {
+        toast.error(`Qualidade baixa (${Math.round(detection.detection.score * 100)}%). Melhore a iluminação e tente novamente.`);
         setCapturingFace(false);
         setCaptureStatus('');
         return;
@@ -225,19 +243,27 @@ export default function ColaboradorDetalhes() {
       // Salvar o descriptor como template facial
       const descriptorArray = Array.from(detection.descriptor);
       
-      await axios.post(
+      const response = await axios.post(
         `${API}/employees/${id}/facial-templates`,
         { descriptor: JSON.stringify(descriptorArray) },
         { headers: getAuthHeader() }
       );
       
-      toast.success('✓ Template facial cadastrado com sucesso!');
-      setShowWebcam(false);
-      setFaceDetected(false);
-      fetchFacialTemplates();
+      if (response.status === 200 || response.status === 201) {
+        toast.success(`✓ Template facial cadastrado! (Qualidade: ${Math.round(detection.detection.score * 100)}%)`);
+        setShowWebcam(false);
+        setFaceDetected(false);
+        fetchFacialTemplates();
+      }
     } catch (error) {
       console.error('Erro ao processar facial:', error);
-      toast.error('Erro ao processar reconhecimento facial');
+      if (error.response?.data?.detail) {
+        toast.error(`Erro: ${error.response.data.detail}`);
+      } else if (error.message) {
+        toast.error(`Erro: ${error.message}`);
+      } else {
+        toast.error('Erro ao processar reconhecimento facial. Tente novamente.');
+      }
     } finally {
       setCapturingFace(false);
       setCaptureStatus('');
