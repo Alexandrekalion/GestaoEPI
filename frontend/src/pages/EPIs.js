@@ -130,11 +130,44 @@ export default function EPIs() {
     });
   };
 
-  const filteredEPIs = epis.filter(epi =>
-    epi.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    epi.ca_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (epi.internal_code && epi.internal_code.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  const filteredEPIs = epis.filter(epi => {
+    // Primeiro aplica filtro de busca por texto
+    const matchesSearch = epi.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      epi.ca_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (epi.internal_code && epi.internal_code.toLowerCase().includes(searchTerm.toLowerCase()));
+    
+    if (!matchesSearch) return false;
+    
+    // Depois aplica filtro específico
+    switch (activeFilter) {
+      case 'low_stock':
+        return isLowStock(epi);
+      case 'expiring':
+        return isExpiringSoon(epi) || isExpired(epi);
+      case 'expired':
+        return isExpired(epi);
+      default:
+        return true;
+    }
+  });
+  
+  const clearFilter = () => {
+    setActiveFilter('all');
+    setSearchParams({});
+  };
+  
+  const getFilterTitle = () => {
+    switch (activeFilter) {
+      case 'low_stock':
+        return 'EPIs com Estoque Baixo';
+      case 'expiring':
+        return 'EPIs com Validade Próxima ou Vencidos';
+      case 'expired':
+        return 'EPIs Vencidos';
+      default:
+        return 'Cadastro de EPIs';
+    }
+  };
 
   if (loading) {
     return (
