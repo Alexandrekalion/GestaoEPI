@@ -648,8 +648,11 @@ export default function ColaboradorDetalhes() {
                       )}
                     </button>
                     <button
-                      onClick={() => setShowWebcam(false)}
-                      className="bg-slate-200 hover:bg-slate-300 text-slate-700 font-medium rounded-lg px-6 py-3"
+                      onClick={() => {
+                        setShowWebcam(false);
+                        setFaceDetected(false);
+                      }}
+                      className="bg-slate-200 hover:bg-slate-300 text-slate-700 font-medium rounded-lg px-6 py-3 transition-colors"
                     >
                       Cancelar
                     </button>
