@@ -10,11 +10,12 @@ import {
   UserCog, 
   Settings,
   LogOut,
-  Truck
+  Truck,
+  X
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 
-export const Sidebar = () => {
+export const Sidebar = ({ onClose }) => {
   const location = useLocation();
   const { user, logout } = useAuth();
   
