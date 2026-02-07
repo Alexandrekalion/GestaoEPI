@@ -455,6 +455,7 @@ export default function EPIs() {
               </form>
             </DialogContent>
           </Dialog>
+          </div>
         </div>
 
         <div className="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
