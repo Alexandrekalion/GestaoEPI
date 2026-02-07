@@ -579,8 +579,8 @@ export default function ColaboradorDetalhes() {
                     )}
                   </div>
                   
-                  {/* Webcam com feedback visual */}
-                  <div className="relative">
+                  {/* Webcam com feedback visual - ÁREA AMPLIADA */}
+                  <div className="relative bg-slate-900 rounded-xl p-2">
                     <Webcam
                       ref={webcamRef}
                       audio={false}
@@ -589,28 +589,34 @@ export default function ColaboradorDetalhes() {
                       className={`w-full rounded-lg border-4 transition-colors ${
                         faceDetected ? 'border-emerald-400' : 'border-amber-300'
                       }`}
+                      style={{ minHeight: '400px' }}
                       videoConstraints={{
                         facingMode: "user",
                         width: { ideal: 1280 },
-                        height: { ideal: 720 },
-                        frameRate: { ideal: 30 },
-                        aspectRatio: 1.333
+                        height: { ideal: 960 },
+                        frameRate: { ideal: 30 }
                       }}
                       mirrored={true}
                     />
-                    {/* Guia de posicionamento */}
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                      <div className={`w-44 h-56 border-4 border-dashed rounded-3xl transition-colors ${
-                        faceDetected ? 'border-emerald-500 opacity-80' : 'border-amber-400 opacity-60'
-                      }`}></div>
+                    {/* Guia de posicionamento - ÁREA MAIOR */}
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none p-2">
+                      <div className={`w-64 h-80 border-4 border-dashed rounded-3xl transition-colors ${
+                        faceDetected ? 'border-emerald-500 opacity-90' : 'border-amber-400 opacity-70'
+                      }`}>
+                        {/* Marcadores de canto para melhor visualização */}
+                        <div className="absolute -top-1 -left-1 w-6 h-6 border-t-4 border-l-4 rounded-tl-lg border-current"></div>
+                        <div className="absolute -top-1 -right-1 w-6 h-6 border-t-4 border-r-4 rounded-tr-lg border-current"></div>
+                        <div className="absolute -bottom-1 -left-1 w-6 h-6 border-b-4 border-l-4 rounded-bl-lg border-current"></div>
+                        <div className="absolute -bottom-1 -right-1 w-6 h-6 border-b-4 border-r-4 rounded-br-lg border-current"></div>
+                      </div>
                     </div>
                     
                     {/* Status de processamento */}
                     {captureStatus && (
-                      <div className="absolute inset-0 bg-black/50 flex items-center justify-center rounded-lg">
-                        <div className="bg-white px-6 py-4 rounded-lg flex items-center gap-3">
-                          <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
-                          <span className="font-medium text-slate-700">{captureStatus}</span>
+                      <div className="absolute inset-0 bg-black/60 flex items-center justify-center rounded-xl">
+                        <div className="bg-white px-8 py-5 rounded-xl flex items-center gap-4 shadow-lg">
+                          <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+                          <span className="font-medium text-lg text-slate-700">{captureStatus}</span>
                         </div>
                       </div>
                     )}
