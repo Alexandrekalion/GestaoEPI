@@ -166,46 +166,61 @@ export default function ColaboradorDetalhes() {
     return new Date(date) < new Date();
   };
   
-  // Função para capturar e cadastrar template facial
+  // Função otimizada de captura - RÁPIDA e com feedback
   const captureFacialTemplate = async () => {
     if (!webcamRef.current || !modelsLoaded) {
       toast.error('Câmera ou modelos não carregados');
       return;
     }
     
-    const imageSrc = webcamRef.current.getScreenshot();
-    if (!imageSrc) {
-      toast.error('Não foi possível capturar a imagem');
+    if (!faceDetected) {
+      toast.error('Posicione o rosto na área verde antes de capturar');
       return;
     }
     
     setCapturingFace(true);
+    setCaptureStatus('Capturando imagem...');
+    
     try {
+      // Capturar screenshot de alta qualidade
+      const imageSrc = webcamRef.current.getScreenshot();
+      if (!imageSrc) {
+        toast.error('Não foi possível capturar a imagem');
+        setCapturingFace(false);
+        return;
+      }
+      
+      setCaptureStatus('Analisando face...');
       const img = await faceapi.fetchImage(imageSrc);
       
-      // Opções otimizadas para captura de template
-      const detectorOptions = new faceapi.TinyFaceDetectorOptions({
-        inputSize: 416,
+      // Usar configuração de alta qualidade para o template final
+      const highQualityOptions = new faceapi.TinyFaceDetectorOptions({
+        inputSize: 512,
         scoreThreshold: 0.5
       });
       
+      setCaptureStatus('Extraindo características...');
       const detection = await faceapi
-        .detectSingleFace(img, detectorOptions)
+        .detectSingleFace(img, highQualityOptions)
         .withFaceLandmarks()
         .withFaceDescriptor();
       
       if (!detection) {
-        toast.error('Nenhum rosto detectado. Posicione o rosto de frente para a câmera com boa iluminação.');
+        toast.error('Rosto não detectado com qualidade suficiente. Tente novamente.');
         setCapturingFace(false);
+        setCaptureStatus('');
         return;
       }
       
       // Verificar qualidade da detecção
-      if (detection.detection.score < 0.7) {
+      if (detection.detection.score < 0.6) {
         toast.error('Qualidade da imagem baixa. Melhore a iluminação e tente novamente.');
         setCapturingFace(false);
+        setCaptureStatus('');
         return;
       }
+      
+      setCaptureStatus('Salvando template...');
       
       // Salvar o descriptor como template facial
       const descriptorArray = Array.from(detection.descriptor);
@@ -218,12 +233,14 @@ export default function ColaboradorDetalhes() {
       
       toast.success('✓ Template facial cadastrado com sucesso!');
       setShowWebcam(false);
+      setFaceDetected(false);
       fetchFacialTemplates();
     } catch (error) {
       console.error('Erro ao processar facial:', error);
       toast.error('Erro ao processar reconhecimento facial');
     } finally {
       setCapturingFace(false);
+      setCaptureStatus('');
     }
   };
   
