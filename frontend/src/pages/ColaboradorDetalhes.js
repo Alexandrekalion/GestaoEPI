@@ -542,61 +542,110 @@ export default function ColaboradorDetalhes() {
               
               {!modelsLoaded ? (
                 <div className="flex items-center justify-center py-8">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mr-3"></div>
+                  <Loader2 className="w-8 h-8 animate-spin text-blue-500 mr-3" />
                   <span className="text-slate-600">Carregando modelos de reconhecimento...</span>
                 </div>
               ) : !showWebcam ? (
                 <button
                   onClick={() => setShowWebcam(true)}
-                  className="w-full bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-lg px-4 py-4 flex items-center justify-center gap-2"
+                  className="w-full bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-lg px-4 py-4 flex items-center justify-center gap-2 transition-colors"
                   data-testid="start-facial-capture"
                 >
-                  <ScanFace className="w-5 h-5" />
+                  <Camera className="w-5 h-5" />
                   Iniciar Captura Facial
                 </button>
               ) : (
                 <div className="space-y-4">
+                  {/* Status da detecção */}
+                  <div className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+                    faceDetected 
+                      ? 'bg-emerald-50 border border-emerald-200' 
+                      : 'bg-amber-50 border border-amber-200'
+                  }`}>
+                    {faceDetected ? (
+                      <>
+                        <CheckCircle className="w-5 h-5 text-emerald-600" />
+                        <span className="text-sm font-medium text-emerald-700">
+                          Rosto detectado - Pronto para capturar!
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <ScanFace className="w-5 h-5 text-amber-600" />
+                        <span className="text-sm font-medium text-amber-700">
+                          Posicione o rosto na área marcada...
+                        </span>
+                      </>
+                    )}
+                  </div>
+                  
+                  {/* Webcam com feedback visual */}
                   <div className="relative">
                     <Webcam
                       ref={webcamRef}
                       audio={false}
                       screenshotFormat="image/jpeg"
-                      screenshotQuality={0.92}
-                      className="w-full rounded-lg border-4 border-blue-200"
+                      screenshotQuality={0.95}
+                      className={`w-full rounded-lg border-4 transition-colors ${
+                        faceDetected ? 'border-emerald-400' : 'border-amber-300'
+                      }`}
                       videoConstraints={{
                         facingMode: "user",
-                        width: { ideal: 640 },
-                        height: { ideal: 480 },
-                        frameRate: { ideal: 30 }
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 },
+                        frameRate: { ideal: 30 },
+                        aspectRatio: 1.333
                       }}
                       mirrored={true}
                     />
+                    {/* Guia de posicionamento */}
                     <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                      <div className="w-48 h-64 border-4 border-dashed border-blue-400 rounded-3xl opacity-60"></div>
+                      <div className={`w-44 h-56 border-4 border-dashed rounded-3xl transition-colors ${
+                        faceDetected ? 'border-emerald-500 opacity-80' : 'border-amber-400 opacity-60'
+                      }`}></div>
                     </div>
+                    
+                    {/* Status de processamento */}
+                    {captureStatus && (
+                      <div className="absolute inset-0 bg-black/50 flex items-center justify-center rounded-lg">
+                        <div className="bg-white px-6 py-4 rounded-lg flex items-center gap-3">
+                          <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
+                          <span className="font-medium text-slate-700">{captureStatus}</span>
+                        </div>
+                      </div>
+                    )}
                   </div>
                   
-                  <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                    <p className="text-sm text-blue-800">
-                      <strong>Dicas para melhor captura:</strong>
+                  {/* Dicas */}
+                  <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg">
+                    <p className="text-xs text-slate-600">
+                      <strong>Dicas:</strong> Boa iluminação frontal • Olhe para a câmera • Rosto centralizado • Sem óculos escuros
                     </p>
-                    <ul className="text-sm text-blue-700 mt-2 space-y-1">
-                      <li>• Posicione o rosto dentro da área tracejada</li>
-                      <li>• Garanta boa iluminação (evite contraluz)</li>
-                      <li>• Olhe diretamente para a câmera</li>
-                      <li>• Remova óculos escuros ou chapéus</li>
-                    </ul>
                   </div>
                   
+                  {/* Botões de ação */}
                   <div className="flex gap-3">
                     <button
                       onClick={captureFacialTemplate}
-                      disabled={capturingFace}
-                      className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white font-medium rounded-lg px-4 py-3 flex items-center justify-center gap-2 disabled:opacity-50"
+                      disabled={capturingFace || !faceDetected}
+                      className={`flex-1 font-medium rounded-lg px-4 py-3 flex items-center justify-center gap-2 transition-all ${
+                        faceDetected && !capturingFace
+                          ? 'bg-emerald-500 hover:bg-emerald-600 text-white'
+                          : 'bg-slate-300 text-slate-500 cursor-not-allowed'
+                      }`}
                       data-testid="capture-facial-button"
                     >
-                      <CheckCircle className="w-5 h-5" />
-                      {capturingFace ? 'Processando...' : 'Capturar e Salvar'}
+                      {capturingFace ? (
+                        <>
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                          Processando...
+                        </>
+                      ) : (
+                        <>
+                          <Camera className="w-5 h-5" />
+                          {faceDetected ? 'Capturar Agora' : 'Aguardando rosto...'}
+                        </>
+                      )}
                     </button>
                     <button
                       onClick={() => setShowWebcam(false)}
