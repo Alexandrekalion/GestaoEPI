@@ -95,28 +95,38 @@ export const Sidebar = ({ onClose }) => {
   return (
     <div className="w-64 bg-slate-900 min-h-screen flex flex-col" data-testid="sidebar">
       <div className="p-6 border-b border-slate-800">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-md overflow-hidden bg-white flex items-center justify-center flex-shrink-0">
-            <img 
-              src={`${process.env.PUBLIC_URL}/icone-cipolatti.png`}
-              alt="Cipolatti" 
-              className="w-9 h-9 object-contain"
-              style={{ maxWidth: '100%', maxHeight: '100%' }}
-              onError={(e) => {
-                console.error('Erro ao carregar imagem:', e);
-                e.target.style.display = 'none';
-                e.target.parentNode.innerHTML = '<span class="text-emerald-600 font-bold text-lg">C</span>';
-              }}
-            />
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-md overflow-hidden bg-white flex items-center justify-center flex-shrink-0">
+              <img 
+                src={`${process.env.PUBLIC_URL}/icone-cipolatti.png`}
+                alt="Cipolatti" 
+                className="w-9 h-9 object-contain"
+                style={{ maxWidth: '100%', maxHeight: '100%' }}
+                onError={(e) => {
+                  console.error('Erro ao carregar imagem:', e);
+                  e.target.style.display = 'none';
+                  e.target.parentNode.innerHTML = '<span class="text-emerald-600 font-bold text-lg">C</span>';
+                }}
+              />
+            </div>
+            <div>
+              <h1 className="text-white font-bold text-lg tracking-tight">Cipolatti</h1>
+              <p className="text-slate-400 text-xs">Gestão de EPI</p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-white font-bold text-lg tracking-tight">Cipolatti</h1>
-            <p className="text-slate-400 text-xs">Gestão de EPI</p>
-          </div>
+          {onClose && (
+            <button
+              onClick={onClose}
+              className="lg:hidden p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          )}
         </div>
       </div>
 
-      <nav className="flex-1 p-4 space-y-1">
+      <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
         {filteredMenu.map((item) => {
           const Icon = item.icon;
           const isActive = location.pathname === item.path;
@@ -125,6 +135,7 @@ export const Sidebar = ({ onClose }) => {
             <Link
               key={item.path}
               to={item.path}
+              onClick={onClose}
               data-testid={`nav-${item.path.replace('/', '')}`}
               className={`
                 flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-all
