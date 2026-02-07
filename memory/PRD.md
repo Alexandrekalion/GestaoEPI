@@ -28,46 +28,49 @@ O usuário solicitou um sistema completo com:
 
 ## Funcionalidades Implementadas
 
-### ✅ Concluído (06/02/2026)
+### ✅ Concluído (07/02/2026)
 - [x] Migração completa de PostgreSQL para MongoDB
 - [x] Login e autenticação JWT
 - [x] Sistema RBAC com 5 perfis de acesso
 - [x] Políticas de senha (complexidade + expiração 30 dias)
-- [x] Dashboard com cards interativos (dados estáticos)
+- [x] Dashboard com cards interativos e navegação filtrada
 - [x] Cadastro de Empresas, Fornecedores, EPIs
 - [x] Gestão de Kits com EPIs (bug de descrição corrigido)
-- [x] Gestão de Colaboradores com foto
+- [x] Gestão de Colaboradores com foto grande na lista
 - [x] Tela de Entrega de EPI com reconhecimento facial obrigatório
 - [x] Tela de Configurações (contador de licença)
 - [x] Tela de Usuários com gestão de perfis e reset de senha
 - [x] Ícone da empresa no login e sidebar
-- [x] Layout de tabela com ações em Empresas, Fornecedores, Kits
 
-### ✅ Implementado Hoje (06/02/2026)
-- [x] **Reconhecimento Facial Completo:**
-  - Modelos face-api.js baixados (tiny_face_detector, face_landmark_68, face_recognition)
-  - Aba "Biometria Facial" na ficha do colaborador
-  - Cadastro de templates faciais via webcam
-  - Comparação de faces na entrega de EPI
-  - Endpoints: GET, POST, DELETE /api/employees/{id}/facial-templates
+### ✅ Implementado Hoje (07/02/2026)
+- [x] **Dashboard Interativo:**
+  - Clicar em "Estoque Baixo" → vai para EPIs filtrados por estoque baixo
+  - Clicar em "Validade Próxima" → vai para EPIs próximos do vencimento
+  - Filtros visuais com botões (Todos, Estoque Baixo, Vencimento)
+  - Alertas visuais: linhas laranjas para estoque baixo, vermelhas para vencidos
+  
+- [x] **Layout Responsivo Mobile:**
+  - Menu hamburger no mobile
+  - Sidebar deslizante com overlay
+  - Colaboradores em cards (não tabela) no mobile
+  - EPIs com tabela responsiva
+
+- [x] **Reconhecimento Facial Otimizado:**
+  - Cache de templates faciais (carrega uma vez)
+  - Detecção contínua de rosto em tempo real
+  - Feedback visual: borda verde quando rosto detectado
+  - Status: "Aguardando rosto..." / "Pronto para capturar!"
+  - Botão só ativa quando rosto é detectado
+  - Qualidade de imagem 1280x720 para melhor precisão
 
 ---
 
 ## Backlog Priorizado
 
 ### P1 - Alta Prioridade
-- [ ] **Dashboard Dinâmico (BI)**
-  - Conectar cards aos endpoints de stats reais
-  - GET /api/stats/low-stock
-  - GET /api/stats/expiring-epis
-  
-- [ ] **Alertas Visuais de Estoque**
-  - Amarelo para estoque baixo
-  - Vermelho para zerado/vencido
-  - Unificar na tela de Cadastro EPI
+- [ ] Teste completo RBAC para perfis RH e Gestor
 
 ### P2 - Média Prioridade
-- [ ] Teste completo RBAC para perfis RH e Gestor
 - [ ] Funcionalidade de Impressão em todas as telas
 - [ ] Importação de Colaboradores via Excel/CSV
 
@@ -93,15 +96,16 @@ O usuário solicitou um sistema completo com:
     ├── public/
     │   ├── icone-cipolatti.png
     │   └── models/     # Modelos face-api.js
-    │       ├── tiny_face_detector_model-*
-    │       ├── face_landmark_68_model-*
-    │       └── face_recognition_model-*
     ├── src/
     │   ├── pages/
-    │   │   ├── ColaboradorDetalhes.js  # Aba Biometria
-    │   │   ├── EntregaEPI.js           # Reconhecimento facial
-    │   │   └── ...
-    │   ├── components/
+    │   │   ├── Dashboard.js            # Cards interativos
+    │   │   ├── EPIs.js                 # Filtros + alertas visuais
+    │   │   ├── Colaboradores.js        # Fotos + layout mobile
+    │   │   ├── ColaboradorDetalhes.js  # Biometria otimizada
+    │   │   └── EntregaEPI.js           # Reconhecimento facial
+    │   ├── components/layout/
+    │   │   ├── DashboardLayout.js      # Layout responsivo
+    │   │   └── Sidebar.js              # Menu mobile
     │   └── contexts/
     └── .env
 ```
@@ -114,9 +118,12 @@ O usuário solicitou um sistema completo com:
 - POST /api/deliveries
 - GET /api/license, POST /api/license/add-days
 - GET /api/dashboard/stats
+- GET /api/stock/alerts
 
 ## Fluxo de Reconhecimento Facial
 1. **Cadastrar colaborador** com foto (tela Colaboradores)
 2. **Cadastrar template facial** na aba Biometria da ficha do colaborador
+   - Detecção em tempo real mostra borda verde quando rosto detectado
+   - Botão "Capturar Agora" só ativa com rosto detectado
 3. **Entrega de EPI:** Sistema compara rosto capturado com templates cadastrados
-4. Se match >= 50%, identifica colaborador e libera entrega
+4. Se match >= 40%, identifica colaborador e libera entrega
