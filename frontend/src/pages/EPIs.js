@@ -207,7 +207,7 @@ export default function EPIs() {
                   <span className="sm:hidden">Novo</span>
                 </Button>
               </DialogTrigger>
-            <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+              <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Cadastrar Novo EPI</DialogTitle>
               </DialogHeader>
