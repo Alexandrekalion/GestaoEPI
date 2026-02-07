@@ -716,38 +716,69 @@ export default function ColaboradorDetalhes() {
                         : 'bg-emerald-50 border-emerald-200'
                     }`}
                   >
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-3">
-                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                          delivery.is_return 
-                            ? 'bg-blue-200 text-blue-800' 
-                            : 'bg-emerald-200 text-emerald-800'
-                        }`}>
-                          {delivery.is_return ? 'Devolução' : 'Entrega'}
-                        </span>
-                        {delivery.facial_match_score && (
-                          <span className="text-xs text-slate-500">
-                            Verificação facial: {(delivery.facial_match_score * 100).toFixed(0)}%
+                    <div className="flex flex-col sm:flex-row gap-4">
+                      {/* Foto da Assinatura Facial */}
+                      {delivery.facial_photo_path && (
+                        <div className="flex-shrink-0">
+                          <div className="relative">
+                            <img 
+                              src={`${BACKEND_URL}${delivery.facial_photo_path}`}
+                              alt="Assinatura facial"
+                              className="w-24 h-24 sm:w-28 sm:h-28 rounded-lg object-cover border-2 border-emerald-300 shadow-sm"
+                            />
+                            <div className="absolute -bottom-2 -right-2 bg-emerald-500 text-white text-xs px-2 py-0.5 rounded-full flex items-center gap-1">
+                              <ScanFace className="w-3 h-3" />
+                              <span>{delivery.facial_match_score ? `${(delivery.facial_match_score * 100).toFixed(0)}%` : '✓'}</span>
+                            </div>
+                          </div>
+                          <p className="text-xs text-slate-500 text-center mt-1">Assinatura</p>
+                        </div>
+                      )}
+                      
+                      {/* Detalhes da Entrega */}
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-3 flex-wrap">
+                            <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                              delivery.is_return 
+                                ? 'bg-blue-200 text-blue-800' 
+                                : 'bg-emerald-200 text-emerald-800'
+                            }`}>
+                              {delivery.is_return ? 'Devolução' : 'Entrega'}
+                            </span>
+                            {!delivery.facial_photo_path && delivery.facial_match_score && (
+                              <span className="text-xs text-slate-500 flex items-center gap-1">
+                                <ScanFace className="w-3 h-3" />
+                                Verificação: {(delivery.facial_match_score * 100).toFixed(0)}%
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-sm text-slate-600 flex items-center gap-1">
+                            <Calendar className="w-4 h-4" />
+                            {new Date(delivery.created_at).toLocaleString('pt-BR')}
                           </span>
+                        </div>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                          {delivery.items?.map((item, i) => (
+                            <div key={i} className="flex items-center gap-2 text-sm text-slate-700 bg-white/50 p-2 rounded">
+                              <Package className="w-4 h-4 text-slate-400" />
+                              <span className="font-medium">{item.epi_name || item.tool_name || item.name}</span>
+                              <span className="text-slate-500">(Qtd: {item.quantity})</span>
+                            </div>
+                          ))}
+                        </div>
+                        
+                        {delivery.delivered_by_name && (
+                          <p className="text-xs text-slate-500 mt-2">
+                            Responsável: {delivery.delivered_by_name}
+                          </p>
+                        )}
+                        {delivery.notes && (
+                          <p className="text-sm text-slate-600 mt-2 italic">Obs: {delivery.notes}</p>
                         )}
                       </div>
-                      <span className="text-sm text-slate-600 flex items-center gap-1">
-                        <Calendar className="w-4 h-4" />
-                        {new Date(delivery.created_at).toLocaleString('pt-BR')}
-                      </span>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                      {delivery.items?.map((item, i) => (
-                        <div key={i} className="flex items-center gap-2 text-sm text-slate-700 bg-white/50 p-2 rounded">
-                          <Package className="w-4 h-4 text-slate-400" />
-                          <span className="font-medium">{item.epi_name || item.tool_name || item.name}</span>
-                          <span className="text-slate-500">(Qtd: {item.quantity})</span>
-                        </div>
-                      ))}
-                    </div>
-                    {delivery.notes && (
-                      <p className="text-sm text-slate-600 mt-2 italic">Obs: {delivery.notes}</p>
-                    )}
                   </div>
                 ))}
               </div>
