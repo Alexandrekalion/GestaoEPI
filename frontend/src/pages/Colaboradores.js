@@ -384,41 +384,93 @@ export default function Colaboradores() {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full">
+              {/* Versão Mobile - Cards */}
+              <div className="block sm:hidden space-y-3 p-4">
+                {filteredColaboradores.map((col) => (
+                  <div 
+                    key={col.id} 
+                    className="bg-white border border-slate-200 rounded-lg p-4 shadow-sm"
+                  >
+                    <div className="flex items-start gap-4">
+                      {col.photo_path ? (
+                        <img 
+                          src={`${BACKEND_URL}${col.photo_path}`} 
+                          alt="" 
+                          className="w-16 h-16 rounded-full object-cover flex-shrink-0 border-2 border-slate-200" 
+                        />
+                      ) : (
+                        <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center flex-shrink-0">
+                          <User className="w-8 h-8 text-emerald-600" />
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-slate-900 text-lg truncate">{col.full_name}</p>
+                        <p className="text-sm text-slate-500">{col.position || 'Sem cargo'}</p>
+                        <p className="text-xs text-slate-400 font-mono mt-1">CPF: {col.cpf}</p>
+                        <div className="flex items-center gap-2 mt-2">
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                            col.status === 'active'
+                              ? 'bg-emerald-100 text-emerald-700'
+                              : 'bg-slate-100 text-slate-600'
+                          }`}>
+                            {col.status === 'active' ? 'Ativo' : 'Inativo'}
+                          </span>
+                          {col.department && (
+                            <span className="text-xs text-slate-500">{col.department}</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="mt-4 pt-3 border-t border-slate-100">
+                      <Button 
+                        size="sm" 
+                        className="w-full bg-emerald-500 hover:bg-emerald-600"
+                        onClick={() => openColaborador(col.id)}
+                      >
+                        <Eye className="w-4 h-4 mr-2" />
+                        Ver Ficha Completa
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              
+              {/* Versão Desktop - Tabela */}
+              <table className="w-full hidden sm:table">
                 <thead className="bg-slate-50 border-b border-slate-200">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Colaborador</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">CPF</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Matrícula</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Cargo</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Setor</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Status</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Ações</th>
+                    <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Colaborador</th>
+                    <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">CPF</th>
+                    <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase hidden md:table-cell">Matrícula</th>
+                    <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase hidden lg:table-cell">Cargo</th>
+                    <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase hidden xl:table-cell">Setor</th>
+                    <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Status</th>
+                    <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Ações</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200">
                   {filteredColaboradores.map((col) => (
                     <tr key={col.id} className="hover:bg-slate-50">
-                      <td className="px-6 py-4">
+                      <td className="px-4 lg:px-6 py-4">
                         <div className="flex items-center gap-3">
                           {col.photo_path ? (
-                            <img src={`${BACKEND_URL}${col.photo_path}`} alt="" className="w-10 h-10 rounded-full object-cover" />
+                            <img src={`${BACKEND_URL}${col.photo_path}`} alt="" className="w-12 h-12 rounded-full object-cover flex-shrink-0 border-2 border-slate-200" />
                           ) : (
-                            <div className="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center">
-                              <User className="w-5 h-5 text-emerald-600" />
+                            <div className="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center flex-shrink-0">
+                              <User className="w-6 h-6 text-emerald-600" />
                             </div>
                           )}
-                          <div>
-                            <p className="font-medium text-slate-900">{col.full_name}</p>
-                            <p className="text-sm text-slate-500">{col.email || '-'}</p>
+                          <div className="min-w-0">
+                            <p className="font-medium text-slate-900 truncate">{col.full_name}</p>
+                            <p className="text-sm text-slate-500 truncate">{col.email || '-'}</p>
                           </div>
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-sm font-mono text-slate-900">{col.cpf}</td>
-                      <td className="px-6 py-4 text-sm font-mono text-slate-900">{col.registration_number || '-'}</td>
-                      <td className="px-6 py-4 text-sm text-slate-900">{col.position || '-'}</td>
-                      <td className="px-6 py-4 text-sm text-slate-900">{col.department || '-'}</td>
-                      <td className="px-6 py-4">
+                      <td className="px-4 lg:px-6 py-4 text-sm font-mono text-slate-900">{col.cpf}</td>
+                      <td className="px-4 lg:px-6 py-4 text-sm font-mono text-slate-900 hidden md:table-cell">{col.registration_number || '-'}</td>
+                      <td className="px-4 lg:px-6 py-4 text-sm text-slate-900 hidden lg:table-cell">{col.position || '-'}</td>
+                      <td className="px-4 lg:px-6 py-4 text-sm text-slate-900 hidden xl:table-cell">{col.department || '-'}</td>
+                      <td className="px-4 lg:px-6 py-4">
                         <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                           col.status === 'active'
                             ? 'bg-emerald-100 text-emerald-700'
@@ -427,7 +479,7 @@ export default function Colaboradores() {
                           {col.status === 'active' ? 'Ativo' : 'Inativo'}
                         </span>
                       </td>
-                      <td className="px-6 py-4">
+                      <td className="px-4 lg:px-6 py-4">
                         <Button 
                           size="sm" 
                           variant="outline" 
@@ -435,7 +487,7 @@ export default function Colaboradores() {
                           data-testid={`view-colaborador-${col.id}`}
                         >
                           <Eye className="w-4 h-4 mr-1" />
-                          Ver Ficha
+                          <span className="hidden lg:inline">Ver Ficha</span>
                         </Button>
                       </td>
                     </tr>
