@@ -74,4 +74,4 @@ O projeto demonstra atuacao em desenvolvimento full stack, modelagem de rotinas 
 
 ## Autoria
 
-Desenvolvido por Michele Santana — Kalion Tecnologia
+Desenvolvido por Alexandre Santana dos Santos — Kalion Tecnologia
